@@ -1,0 +1,391 @@
+[
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/Eporner.cs3",
+        "status": 1,
+        "version": 2,
+        "name": "Eporner",
+        "internalName": "Eporner",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "Eporner videos via its public API, direct MP4 up to 1440p.",
+        "fileSize": 18791,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=eporner.com&sz=%size%",
+        "apiVersion": 1,
+        "fileHash": "sha256-68f13b032dd2a905ad8b7a95ff895b8fec7eaf895c6b43f19a195c7adb86b21a",
+        "jarFileSize": 68727,
+        "jarUrl": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/Eporner.jar",
+        "jarHash": "sha256-64ac1784b3cc43538148f1ad92f357f021dffcd8a04fc1b9178ce691431fde92"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/FreePornVideos.cs3",
+        "status": 1,
+        "version": 2,
+        "name": "FreePornVideos",
+        "internalName": "FreePornVideos",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "Full-length free porn videos with direct MP4 sources.",
+        "fileSize": 15967,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=freepornvideos.xxx&sz=%size%",
+        "apiVersion": 1,
+        "fileHash": "sha256-a1669e2e6724e72eb07d620a83347b9f9d8bea0dfb59d7ad116f003d6641a48f",
+        "jarFileSize": 61169,
+        "jarUrl": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/FreePornVideos.jar",
+        "jarHash": "sha256-7dab4cb7a5e4925bfadacb71e2e624d578c8fdcb586d031f26e2195fcf769fa1"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/Hanime.cs3",
+        "status": 1,
+        "version": 2,
+        "name": "Hanime",
+        "internalName": "Hanime",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "Hentai from hanime.tv. HLS streams up to 720p, with Pixeldrain MP4 mirrors.",
+        "fileSize": 45098,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=hanime.tv&sz=%size%",
+        "apiVersion": 1,
+        "fileHash": "sha256-ec6fa3ec7a3003d44532312967efb10015b66a2ffa93dae29b32f8edd6efe400",
+        "jarFileSize": 208463,
+        "jarUrl": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/Hanime.jar",
+        "jarHash": "sha256-990d1a06fe965c6ef5d37a93467ca44427980ce6bef2cee0c7693288d20221a6"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/HentaiHaven.cs3",
+        "status": 1,
+        "version": 2,
+        "name": "HentaiHaven",
+        "internalName": "HentaiHaven",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "Hentai from hentaihaven.xxx. HLS streams up to 1080p (VP9), with multi-language subtitles on newer uploads.",
+        "fileSize": 47528,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=hentaihaven.xxx&sz=%size%",
+        "apiVersion": 1,
+        "fileHash": "sha256-7e1cae849ce82015413501e6e4fc6c58590d3d046b82d89f6c0f00aa2106b6a1",
+        "jarFileSize": 241146,
+        "jarUrl": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/HentaiHaven.jar",
+        "jarHash": "sha256-eec80d2bd29ce64f31a0340141051ccbc12e3ee1ff91707c52eb0cf9751e4493"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/HentaiMama.cs3",
+        "status": 1,
+        "version": 2,
+        "name": "HentaiMama",
+        "internalName": "HentaiMama",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "Hentai from hentaimama.io. Direct MP4 (1080p/720p/480p) and HLS mirrors.",
+        "fileSize": 23387,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=hentaimama.io&sz=%size%",
+        "apiVersion": 1,
+        "fileHash": "sha256-0c2f560762cd013ff91fe13553761f1936ee5068a5cc04678440911972c69197",
+        "jarFileSize": 90954,
+        "jarUrl": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/HentaiMama.jar",
+        "jarHash": "sha256-958d7dce63df0e2dab3bf4c61587649f1e1ecf6752ea5eb21b66a8854e377861"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/Hentaverse.cs3",
+        "status": 1,
+        "version": 2,
+        "name": "Hentaverse",
+        "internalName": "Hentaverse",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "Hentai series from hentaverse.com. First-party HLS up to 1080p with MP4 renditions and VTT subtitles.",
+        "fileSize": 38759,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=hentaverse.com&sz=%size%",
+        "apiVersion": 1,
+        "fileHash": "sha256-4a856a20e62aac935b85a46e76aa3bcf7636d25a6bcf768a3b3961e1dc95b9cc",
+        "jarFileSize": 187565,
+        "jarUrl": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/Hentaverse.jar",
+        "jarHash": "sha256-e3e6171bbf877e98c2a47a3b3d6cd3c8017d3eb208626a6bc523a8c0e09fd56f"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/HStream.cs3",
+        "status": 1,
+        "version": 2,
+        "name": "HStream",
+        "internalName": "HStream",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "Hentai from hstream.moe. DASH streams up to 4K (1080p and 4K are AV1, shown only on devices with an AV1 decoder), H.264 720p MP4 and English ASS subtitles.",
+        "fileSize": 30600,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=hstream.moe&sz=%size%",
+        "apiVersion": 1,
+        "fileHash": "sha256-b54caaf3d07bfaf5ef012be5feef08371eac32d7788946a1a907dcc215f80f26",
+        "jarFileSize": 118802,
+        "jarUrl": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/HStream.jar",
+        "jarHash": "sha256-5d2edd9175bed4d184d5620f84eefce9d618094ed8333c43dccb4c51c0f43246"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/JavExtractors.cs3",
+        "status": 1,
+        "version": 23,
+        "name": "JavExtractors",
+        "internalName": "JavExtractors",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "Host and JAV page extractors for the NSFW sources",
+        "fileSize": 86610,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "Others"
+        ],
+        "apiVersion": 1,
+        "fileHash": "sha256-c523baf0ef06a769a56de00163ae165c93903e3a384113838eb4a082834834c1"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/JavFc2.cs3",
+        "status": 1,
+        "version": 8,
+        "name": "JavFc2",
+        "internalName": "JavFc2",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "JAVFC2.XYZ a site watch Free All Best JAV FC2PPV Online HD Porn Streaming, FC2 PPV AMATER PORN, FC2 PPV Sex Video, Free Japanese Porn with English subtitles",
+        "fileSize": 12584,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://img.javfc2vid.top/image/javfc2.xyz/uploads/system_logo/logo.png",
+        "apiVersion": 1,
+        "fileHash": "sha256-12290dfd998655af3202bc2a6679ade6c50419f84aa8133965616c146a7209b4",
+        "jarFileSize": 40326,
+        "jarUrl": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/JavFc2.jar",
+        "jarHash": "sha256-7c73f888a52ac7c9778e72a3c2764738e734aadda2967f61c3488ea1f91c4b65"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/JavHdz.cs3",
+        "status": 1,
+        "version": 16,
+        "name": "JavHdz",
+        "internalName": "JavHdz",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "Japanese Adult Video from Vietnam Server",
+        "fileSize": 54850,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://javhdz.men/favicon.ico",
+        "apiVersion": 1,
+        "fileHash": "sha256-3d7b28a55726113680cfeb12642bf5507d4c01f53704cdcf19242bfbafe98b97"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/JavStream.cs3",
+        "status": 1,
+        "version": 9,
+        "name": "JavStream",
+        "internalName": "JavStream",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "#1 best extension for JAV: SexTB titles, played from SexTB, Javtiful, MissAV, JavGG, SupJav, JavFC2 and JavHD at once. Requires the JavExtractors plugin.",
+        "fileSize": 42247,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://sextb.net/&size=128",
+        "apiVersion": 1,
+        "fileHash": "sha256-61b332b3cb126b5a0dee5ba60d0404bc1930881278c00f605e017ab671c247c3"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/Javtiful.cs3",
+        "status": 1,
+        "version": 14,
+        "name": "Javtiful",
+        "internalName": "Javtiful",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "Watch more than 60,000 Full HD JAV Online For Free at Javtiful. Requires the JavExtractors plugin.",
+        "fileSize": 12875,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://t0.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://javtiful.com/main&size=128",
+        "apiVersion": 1,
+        "fileHash": "sha256-e3f5b726bd292e06d33fbb38459a9ca6b74e20edbae081508b90bb36df7f628f"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/MissAV.cs3",
+        "status": 1,
+        "version": 6,
+        "name": "MissAV",
+        "internalName": "MissAV",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "Best Japan AV porn site, free forever, high speed, no lag, over 100,000 videos with daily update. Requires the JavExtractors plugin.",
+        "fileSize": 13089,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://missav.ws/missav/logo-square.png",
+        "apiVersion": 1,
+        "fileHash": "sha256-b05d419134517c543fe783c24a04d6575028d82ea6e0aedbe5dfbea26532f5f8"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/Pornhub.cs3",
+        "status": 1,
+        "version": 3,
+        "name": "Pornhub",
+        "internalName": "Pornhub",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "Pornhub videos with signed HLS and MP4 sources.",
+        "fileSize": 20554,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=pornhub.com&sz=%size%",
+        "apiVersion": 1,
+        "fileHash": "sha256-2ffc22011234139a0e32191cd62f107af57603e2b483733a7223228a5f1f86f9",
+        "jarFileSize": 74752,
+        "jarUrl": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/Pornhub.jar",
+        "jarHash": "sha256-b8be2fc370137e5ab3cd5e7a7bf280798a3fe94e58e470ca98c72b694947895f"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/SexTB.cs3",
+        "status": 1,
+        "version": 9,
+        "name": "SexTB",
+        "internalName": "SexTB",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "The Best Free JAV online, JAV DVD online, Stream JAV Online High Quality always updated daily. Requires the JavExtractors plugin.",
+        "fileSize": 13857,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://sextb.net/&size=128",
+        "apiVersion": 1,
+        "fileHash": "sha256-3cd55bb8a861f16cfca71b51728ffe24b7a4d902b5765c8debde8537dbad9f1b"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/SupJav.cs3",
+        "status": 1,
+        "version": 1,
+        "name": "SupJav",
+        "internalName": "SupJav",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "Censored, uncensored, amateur and subtitled JAV from SupJav, up to 1080p HLS. Plays the site's Vidara, EarnVids, LuluStream and VOE servers (older posts: FC2Stream, StreamTape). Requires the JavExtractors plugin for all but VOE and StreamTape.",
+        "fileSize": 24008,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=supjav.com&sz=%size%",
+        "apiVersion": 1,
+        "fileHash": "sha256-7d3ee8378a6d38092368220529968711e5f5a97ba16ed4377e2aa4241c0eeff5"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/XHamster.cs3",
+        "status": 1,
+        "version": 2,
+        "name": "XHamster",
+        "internalName": "XHamster",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "xHamster free adult videos.",
+        "fileSize": 20284,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=xhamster.com&sz=%size%",
+        "apiVersion": 1,
+        "fileHash": "sha256-8102b954fa63f82544c4d46201baf5ee31bdfcbfdd986fdde02f040e21637ec9",
+        "jarFileSize": 75398,
+        "jarUrl": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/XHamster.jar",
+        "jarHash": "sha256-b3da6db1abfe17f53947db04aef2ddf0f3a856803491287c2efcd6b915fc9e09"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/builds/XPrimeHub.cs3",
+        "status": 1,
+        "version": 4,
+        "name": "XPrimeHub",
+        "internalName": "XPrimeHub",
+        "authors": [
+            "NropVox"
+        ],
+        "description": "Indian OTT web series (ULLU, NeonX, MoodX, Atrangii\u2026) and adult films from XPrimeHub. Streams V-Cloud, HubCloud and V-Drive mirrors; G-Direct and 10Gbps as download-only links.",
+        "fileSize": 52259,
+        "repositoryUrl": "https://github.com/NropVox/cloudstream-extensions-nropvox",
+        "language": "en",
+        "tvTypes": [
+            "NSFW"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=xprimehub.pics&sz=%size%",
+        "apiVersion": 1,
+        "fileHash": "sha256-c84dded5cb825d668385d8556b1b32930a0566588220492d4d3bd83e8bcc83e9"
+    }
+]

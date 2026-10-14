@@ -1,0 +1,9 @@
+{
+    "name": "NropVox Repo",
+    "iconUrl": "https://avatars.githubusercontent.com/u/89844706",
+    "description": "NropVox Repository",
+    "manifestVersion": 1,
+    "pluginLists": [
+      "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/refs/heads/builds/plugins.json"
+    ]
+}

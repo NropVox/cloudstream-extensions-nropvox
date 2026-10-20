@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     authors = listOf("NropVox")
@@ -13,7 +13,7 @@ cloudstream {
      * 2: Slow
      * 3: Beta only
      **/
-    status = 3 // will be 3 if unspecified
+    status = 1 // will be 3 if unspecified
     tvTypes = listOf("AsianDrama", "Movie", "TvSeries")
     iconUrl = "https://assets.goplay.su/hearticon180.png"
 }

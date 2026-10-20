@@ -31,9 +31,14 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newDrmExtractorLink
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.runBlocking
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Interceptor
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 class GoPlay : MainAPI() {
     override var mainUrl = "https://goplay.su"
@@ -42,6 +47,10 @@ class GoPlay : MainAPI() {
     override var lang = "en"
     override val hasQuickSearch = false
     override val supportedTypes = setOf(TvType.AsianDrama, TvType.Movie, TvType.TvSeries)
+
+    private companion object {
+        const val MAX_LINK_REFS = 200
+    }
 
     // Title links start with a hex-encoded provider ID, e.g. /562d3132343433/Descendants-of-the-Sun/
     private val titlePath = Regex("""^/[0-9a-fA-F]+/[^/?#]+/""")
@@ -181,12 +190,22 @@ class GoPlay : MainAPI() {
         return label
     }
 
-    override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
+    private class ResolvedSource(
+        val file: String,
+        val type: ExtractorLinkType,
+        val label: String?,
+        val headers: Map<String, String>,
+        val clearKey: GoPlayPlayer.ClearKey?,
+    )
+
+    private class Resolved(
+        val server: String?,
+        val sources: List<ResolvedSource>,
+        val tracks: List<GoPlayPlayer.PlayerTrack>,
+    )
+
+    /** Fetches the page and decrypts the player; every call yields fresh single-use media URLs. */
+    private suspend fun resolve(data: String): Resolved? {
         val response = GoPlaySession.get(data)
         val config = GoPlayPlayer.extract(response.text) { scriptUrl ->
             try {
@@ -201,57 +220,118 @@ class GoPlay : MainAPI() {
                 Log.w(name, "Could not load $scriptUrl: ${e.message}")
                 null
             }
-        } ?: return false.also { Log.w(name, "No player configuration on $data") }
+        } ?: return null.also { Log.w(name, "No player configuration on $data") }
         val server = response.document.selectFirst("#sourceid_placeholder")?.text()
             ?.replace(Regex("\\s+"), " ")?.trim()?.ifEmpty { null }
-        val sourceName = listOfNotNull(name, server).joinToString(" ")
 
-        // Manifest and subtitle URLs are single-use: hand them straight to the player, never prefetch.
         val mediaHeaders = mapOf("User-Agent" to GoPlaySession.currentUserAgent)
-        var found = false
+        val sources = mutableListOf<ResolvedSource>()
+        val tracks = mutableListOf<GoPlayPlayer.PlayerTrack>()
         for (item in config.playlist?.takeIf { it.isNotEmpty() } ?: listOf(config)) {
-            val sources = item.sources?.takeIf { it.isNotEmpty() }
+            val itemSources = item.sources?.takeIf { it.isNotEmpty() }
                 ?: listOf(GoPlayPlayer.PlayerSource(item.file, item.type, item.label, item.headers, item.drm))
-            for (source in sources) {
+            for (source in itemSources) {
                 val file = source.file?.let { fixUrl(it) } ?: continue
                 val type = linkType(file, source.type) ?: continue
-                val headers = mediaHeaders + config.headers.orEmpty() + item.headers.orEmpty() +
-                    source.headers.orEmpty()
-                val clearKey = (source.drm ?: item.drm ?: config.drm)?.clearkey
-                val linkName = listOfNotNull(sourceName, source.label?.ifBlank { null }).joinToString(" - ")
-
-                val link = if (clearKey?.key != null && clearKey.keyId != null) {
-                    newDrmExtractorLink(sourceName, linkName, file, type, CLEARKEY_UUID) {
-                        kid = jwkKey(clearKey.keyId)
-                        key = jwkKey(clearKey.key)
-                        referer = "$mainUrl/"
-                        quality = Qualities.Unknown.value
-                        this.headers = headers
-                    }
-                } else {
-                    newExtractorLink(sourceName, linkName, file, type) {
-                        referer = "$mainUrl/"
-                        quality = Qualities.Unknown.value
-                        this.headers = headers
-                    }
-                }
-                callback(link)
-                found = true
+                sources.add(
+                    ResolvedSource(
+                        file, type, source.label?.ifBlank { null },
+                        mediaHeaders + config.headers.orEmpty() + item.headers.orEmpty() + source.headers.orEmpty(),
+                        (source.drm ?: item.drm ?: config.drm)?.clearkey
+                    )
+                )
             }
-
             item.tracks.orEmpty()
                 .filter { it.kind == null || it.kind == "captions" || it.kind == "subtitles" }
-                .forEach { track ->
-                    val file = track.file ?: return@forEach
-                    subtitleCallback(
-                        newSubtitleFile(track.label ?: track.language ?: "Unknown", fixUrl(file)) {
-                            this.headers = mediaHeaders
-                        }
-                    )
-                }
+                .filter { it.file != null }
+                .let(tracks::addAll)
         }
-        return found
+        return Resolved(server, sources, tracks)
     }
+
+    /** A single-use media URL handed to the player, and how to get a fresh one for it. */
+    private class LinkRef(val data: String, val pick: (Resolved) -> String?) {
+        val used = AtomicBoolean(false)
+    }
+
+    private val linkRefs = ConcurrentHashMap<String, LinkRef>()
+
+    private fun register(file: String, data: String, pick: (Resolved) -> String?) {
+        // Keyed as OkHttp renders the request URL so the interceptor can look it up verbatim.
+        if (linkRefs.size > MAX_LINK_REFS) linkRefs.clear()
+        linkRefs[file.toHttpUrlOrNull()?.toString() ?: file] = LinkRef(data, pick)
+    }
+
+    override suspend fun loadLinks(
+        data: String,
+        isCasting: Boolean,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ): Boolean {
+        val resolved = resolve(data) ?: return false
+        val sourceName = listOfNotNull(name, resolved.server).joinToString(" ")
+
+        // Manifest and subtitle URLs are single-use: hand them straight to the player, never prefetch.
+        resolved.sources.forEachIndexed { index, source ->
+            val linkName = listOfNotNull(sourceName, source.label).joinToString(" - ")
+            val clearKey = source.clearKey
+
+            // The source must equal the API name for getVideoInterceptor to be consulted.
+            val link = if (clearKey?.key != null && clearKey.keyId != null) {
+                newDrmExtractorLink(name, linkName, source.file, source.type, CLEARKEY_UUID) {
+                    kid = jwkKey(clearKey.keyId)
+                    key = jwkKey(clearKey.key)
+                    referer = "$mainUrl/"
+                    quality = Qualities.Unknown.value
+                    this.headers = source.headers
+                }
+            } else {
+                newExtractorLink(name, linkName, source.file, source.type) {
+                    referer = "$mainUrl/"
+                    quality = Qualities.Unknown.value
+                    this.headers = source.headers
+                }
+            }
+            register(source.file, data) { it.sources.getOrNull(index)?.file }
+            callback(link)
+        }
+
+        val mediaHeaders = mapOf("User-Agent" to GoPlaySession.currentUserAgent)
+        resolved.tracks.forEachIndexed { index, track ->
+            val file = fixUrl(track.file!!)
+            register(file, data) { it.tracks.getOrNull(index)?.file?.let(::fixUrl) }
+            subtitleCallback(
+                newSubtitleFile(track.label ?: track.language ?: "Unknown", file) {
+                    this.headers = mediaHeaders
+                }
+            )
+        }
+        return resolved.sources.isNotEmpty()
+    }
+
+    /**
+     * CloudStream caches the links from [loadLinks], so replaying an episode reuses media and
+     * subtitle URLs the server already invalidated. The first request for a URL passes through
+     * untouched; any later request for the same URL is pointed at a freshly resolved one.
+     */
+    private val refreshInterceptor = Interceptor { chain ->
+        val request = chain.request()
+        val ref = linkRefs[request.url.toString()]
+        if (ref == null || !ref.used.getAndSet(true)) return@Interceptor chain.proceed(request)
+
+        Log.i(name, "Refreshing spent link ${request.url.encodedPath}")
+        val fresh = try {
+            runBlocking { resolve(ref.data) }?.let(ref.pick)?.toHttpUrlOrNull()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(name, "Link refresh failed: ${e.message}")
+            null
+        }
+        chain.proceed(if (fresh == null) request else request.newBuilder().url(fresh).build())
+    }
+
+    override fun getVideoInterceptor(extractorLink: ExtractorLink): Interceptor = refreshInterceptor
 
     private fun linkType(url: String, type: String?): ExtractorLinkType? =
         when (type?.lowercase()) {

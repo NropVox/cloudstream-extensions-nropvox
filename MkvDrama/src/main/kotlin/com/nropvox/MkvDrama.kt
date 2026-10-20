@@ -1,359 +1,174 @@
 package com.nropvox
 
-import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.databind.JsonNode
+import com.lagradost.api.Log
+import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.LoadResponse.Companion.addActors
+import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.Score
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SearchResponseList
+import com.lagradost.cloudstream3.ShowStatus
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.app
-import com.lagradost.cloudstream3.fixUrl
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
+import com.lagradost.cloudstream3.newMovieLoadResponse
+import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newSearchResponseList
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.loadExtractor
-import org.jsoup.nodes.Element
+import kotlinx.coroutines.CancellationException
+import org.jsoup.Jsoup
+import java.net.URI
+import java.net.URLEncoder
 
 class MkvDrama : MainAPI() {
-    override var mainUrl = "https://mkvdrama.org"
+    override var mainUrl = "https://mkvdrama.net"
     override var name = "MkvDrama"
-    override val hasMainPage = true
     override var lang = "en"
-    override val supportedTypes = setOf(TvType.AsianDrama)
-
-    private val imageUrl = "https://i2.wp.com/mkvdrama.org"
-
-    private val pageLimit = 20
-
+    override val hasMainPage = true
+    override val supportedTypes = setOf(TvType.AsianDrama, TvType.Movie)
     override val mainPage = mainPageOf(
-        "titles?order=latest" to "Latest",
-        "titles?order=popular" to "Popular"
+        "type=drama&order=latest" to "Latest dramas",
+        "type=mini_drama&order=latest" to "Mini dramas",
+        "type=movie&order=latest" to "Movies",
+        "order=popular" to "Popular",
+        "order=rating" to "Top rated",
     )
+
+    private fun image(value: String?): String? = value?.let { URI(mainUrl).resolve(it).toString() }
+        ?.takeIf(MkvDramaDecoder::isHttp)?.let { url ->
+            if (URI(url).host == URI(mainUrl).host && URI(url).path.startsWith("/wp-content/"))
+                "https://i2.wp.com/${url.substringAfter("://")}" else url
+        }
+
+    private fun card(title: String, url: String, type: String?, poster: String?, release: String? = null): SearchResponse =
+        if (type == "movie") newMovieSearchResponse(title, url, TvType.Movie) {
+            posterUrl = image(poster)
+            year = release?.take(4)?.toIntOrNull()
+        } else newTvSeriesSearchResponse(title, url, TvType.AsianDrama) {
+            posterUrl = image(poster)
+            year = release?.take(4)?.toIntOrNull()
+        }
+
+    private fun JsonNode.toCard(): SearchResponse? {
+        val title = textOrNull("title") ?: return null
+        val slug = textOrNull("slug")?.takeIf { '/' !in it } ?: return null
+        return card(title, "$mainUrl/$slug", textOrNull("type"), textOrNull("cover_url") ?: textOrNull("poster_url"), textOrNull("release_date"))
+    }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = "$mainUrl/${request.data}&per_page=$pageLimit&page=$page"
-        val document = app.get(
-            url,
-            headers = mapOf("Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-        ).document
-
-        val home = document.select("#content article")
-            .mapNotNull { it.toMainPageResult() }
-            .distinctBy { it.url }
-
-        return newHomePageResponse(
-            request.name,
-            home,
-            hasNext = document.selectFirst(".page-next") != null
-        )
+        val result = MkvDramaSession().get("$mainUrl/titles/?${request.data}&page=$page", acceptJson = true).json()
+        check(result.path("results").isArray) { "Unrecognized MKVDrama catalog response" }
+        return newHomePageResponse(request.name, result.path("results").mapNotNull { it.toCard() },
+            hasNext = result.path("page").asInt(page).toLong() * result.path("per_page").asInt(30) < result.path("total").asLong())
     }
-
-    fun Element.toMainPageResult(): SearchResponse? {
-        val anchorTag = this.selectFirst("a") ?: return null
-
-        return newTvSeriesSearchResponse(
-            name = anchorTag.attr("title"),
-            url = fixUrl(anchorTag.attr("href")),
-            type = TvType.TvSeries
-        ) {
-            posterUrl = this@toMainPageResult.selectFirst("img")?.attr("src")
-        }
-    }
-
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
-        val url = "$mainUrl/search?q=$query&per_page=$pageLimit&page=$page"
-        val document = app.get(
-            url,
-            headers = mapOf("Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-        ).document
-
-        val searchResult = document.select("#content article")
-            .mapNotNull { it.toMainPageResult() }
-            .distinctBy { it.url }
-
-        return newSearchResponseList(
-            searchResult,
-            hasNext = document.selectFirst(".page-next") != null
-        )
+        if (query.isBlank()) return newSearchResponseList(emptyList(), false)
+        val url = "$mainUrl/search?q=${URLEncoder.encode(query.trim(), "UTF-8")}&page=$page"
+        val response = MkvDramaSession().get(url)
+        val document = Jsoup.parse(response.text, response.url)
+        val results = document.select("article.bs a.tip[href]").mapNotNull { anchor ->
+            val href = anchor.absUrl("href")
+            if (!MkvDramaDecoder.isHttp(href) || URI(href).host != URI(mainUrl).host) return@mapNotNull null
+            val title = anchor.attr("title").ifBlank { anchor.selectFirst("h2")?.text().orEmpty() }
+            if (title.isBlank()) return@mapNotNull null
+            val img = anchor.selectFirst("img")
+            val poster = img?.attr("data-src")?.ifBlank { img.attr("data-lazy-src") }?.ifBlank { img.attr("src") }
+            card(title, href, anchor.selectFirst(".typez")?.text()?.lowercase(), poster)
+        }.distinctBy { it.url }
+        return newSearchResponseList(results, hasNext = document.selectFirst(".hpage a.page-next[href]") != null)
     }
 
-    override suspend fun load(url: String): LoadResponse? {
-        val series = app.get(url).parsedSafe<SeriesResponse>()?.series ?: return null
-
-        val episodes = series.totalEpisodes.let { totalEpisodes ->
-            (1..totalEpisodes).map {
-                newEpisode(it) {
-                    name = "Episode $it"
-                }
+    override suspend fun load(url: String): LoadResponse {
+        val session = MkvDramaSession()
+        val canonical = URI(mainUrl).resolve(URI(url).path).toString()
+        val series = session.get(canonical, acceptJson = true).json().path("series")
+        val title = series.textOrNull("title") ?: throw ErrorLoadingException("MKVDrama title metadata is unavailable")
+        val poster = image(series.textOrNull("cover_url"))
+        val releaseYear = series.textOrNull("release_date")?.take(4)?.toIntOrNull()
+        val genres = series.path("genres").mapNotNull { it.textOrNull("name") }
+        val actors = series.path("cast").mapNotNull { it.textOrNull("name") }
+        val trailer = series.textOrNull("trailer_id")?.let { "https://www.youtube.com/watch?v=$it" }
+        val plot = series.textOrNull("synopsis")
+        if (series.textOrNull("type") == "movie") {
+            return newMovieLoadResponse(title, canonical, TvType.Movie, mkvJson.writeValueAsString(MkvEpisodeData(canonical))) {
+                posterUrl = poster
+                year = releaseYear
+                this.plot = plot
+                tags = genres
+                score = Score.from10(series.get("score")?.takeUnless { it.isNull }?.asDouble())
+                duration = series.path("duration_minutes").asInt().takeIf { it > 0 }
+                addActors(actors)
+                addTrailer(trailer)
             }
         }
-
-        return newTvSeriesLoadResponse(
-            name = series.title,
-            url = url,
-            type = TvType.AsianDrama,
-            episodes = episodes
-        ) {
-            posterUrl = "$imageUrl/${series.coverUrl}"
-            tags = series.tags.mapNotNull { it.label }
-            plot = series.synopsis
-            score = Score.from10(series.score)
-            year = series.aired.substringBefore("-").trim().substringAfterLast(" ").toIntOrNull()
-
-            addActors(series.cast.map { it.name })
+        val releases = MkvDramaDecoder.releases(session.panel(canonical), canonical)
+        val regular = releases.filterNot { MkvDramaDecoder.isExtra(it.group) }
+        // The metadata total is a planned count; expose only ranges published in the panel.
+        val numbers = regular.flatMap { item ->
+            MkvDramaDecoder.span(item.group)?.let { range ->
+                if (range.last <= 2000) (range.first..range.last).toList() else emptyList()
+            }.orEmpty()
+        }.distinct().sorted()
+        val episodes = numbers.map { number ->
+            newEpisode(mkvJson.writeValueAsString(MkvEpisodeData(canonical, number))) {
+                name = "Episode $number"
+                episode = number
+            }
+        } + releases.filter { MkvDramaDecoder.isExtra(it.group) }.distinctBy { it.group }.map { item ->
+            newEpisode(mkvJson.writeValueAsString(MkvEpisodeData(canonical, group = item.group))) { name = item.group }
+        }
+        if (episodes.isEmpty()) throw ErrorLoadingException("MKVDrama has no published, identifiable episode links for this title")
+        return newTvSeriesLoadResponse(title, canonical, TvType.AsianDrama, episodes) {
+            posterUrl = poster
+            backgroundPosterUrl = image(series.textOrNull("big_cover_url"))
+            year = releaseYear
+            this.plot = plot
+            tags = genres
+            score = Score.from10(series.get("score")?.takeUnless { it.isNull }?.asDouble())
+            showStatus = when (series.textOrNull("status")) {
+                "completed" -> ShowStatus.Completed
+                "ongoing" -> ShowStatus.Ongoing
+                else -> null
+            }
+            addActors(actors)
+            addTrailer(trailer)
         }
     }
 
-    override suspend fun loadLinks(
-        data: String,
-        isCasting: Boolean,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        loadExtractor(data, subtitleCallback, callback)
+    override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
+        val target = mkvJson.readValue(data, MkvEpisodeData::class.java)
+        val session = MkvDramaSession()
+        val releases = MkvDramaDecoder.releases(session.panel(target.url), target.url).filter { item ->
+            when {
+                target.group != null -> item.group == target.group
+                target.episode == null -> !MkvDramaDecoder.isExtra(item.group)
+                MkvDramaDecoder.isExtra(item.group) -> false
+                else -> MkvDramaDecoder.span(item.group)?.let { target.episode in it.first..it.last } == true
+            }
+        }.sortedByDescending { Regex("(\\d{3,4})p", RegexOption.IGNORE_CASE).find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0 }
+        val resolver = MkvDramaResolver(session)
+        var found = false
+        for (item in releases) {
+            try {
+                val range = MkvDramaDecoder.span(item.group)
+                val file = if (target.episode == null || range?.let { it.first == it.last } == true)
+                    MkvFile(item.url, episode = item.group, quality = item.quality) else null
+                found = resolver.resolve(item.url, target, "${item.group} · ${item.quality} · ${item.mirror}", item.quality,
+                    target.url, subtitleCallback, callback, file) || found
+            } catch (e: CancellationException) { throw e
+            } catch (e: Exception) { Log.w("MkvDrama", "${item.quality} ${item.mirror}: ${e.javaClass.simpleName}") }
+        }
+        if (!found) throw ErrorLoadingException("No playable MKVDrama mirror resolved. Shortener/Filecrypt verification or an unsupported file host may block this release.")
         return true
     }
-
-    data class SeriesResponse(
-        @JsonProperty("series")
-        val series: Drama,
-
-        @JsonProperty("canonical")
-        val canonical: String,
-    )
-
-    // Main Drama class
-    data class Drama(
-        @JsonProperty("id")
-        val id: Int,
-
-        @JsonProperty("title")
-        val title: String,
-
-        @JsonProperty("slug")
-        val slug: String,
-
-        @JsonProperty("type")
-        val type: String,
-
-        @JsonProperty("status")
-        val status: String,
-
-        @JsonProperty("release_date")
-        val releaseDate: String,
-
-        @JsonProperty("duration_minutes")
-        val durationMinutes: Int,
-
-        @JsonProperty("score")
-        val score: Double,
-
-        @JsonProperty("synopsis")
-        val synopsis: String,
-
-        @JsonProperty("total_episodes")
-        val totalEpisodes: Int,
-
-        @JsonProperty("trailer_id")
-        val trailerId: String?,
-
-        @JsonProperty("cover_url")
-        val coverUrl: String,
-
-        @JsonProperty("big_cover_url")
-        val bigCoverUrl: String?,
-
-        @JsonProperty("gallery")
-        val gallery: String?,
-
-        @JsonProperty("aired_days")
-        val airedDays: List<String>,
-
-        @JsonProperty("is_subbed")
-        val isSubbed: Boolean,
-
-        @JsonProperty("is_dubbed")
-        val isDubbed: Boolean,
-
-        @JsonProperty("is_censored")
-        val isCensored: Boolean,
-
-        @JsonProperty("is_mature_content")
-        val isMatureContent: Boolean,
-
-        @JsonProperty("is_hot")
-        val isHot: Boolean,
-
-        @JsonProperty("alternative_title")
-        val alternativeTitle: String,
-
-        @JsonProperty("sub_type")
-        val subType: String,
-
-        @JsonProperty("maturity_rating")
-        val maturityRating: String?,
-
-        @JsonProperty("meta_title")
-        val metaTitle: String?,
-
-        @JsonProperty("meta_description")
-        val metaDescription: String?,
-
-        @JsonProperty("aired")
-        val aired: String,
-
-        @JsonProperty("post_status")
-        val postStatus: String,
-
-        @JsonProperty("visibility")
-        val visibility: String,
-
-        @JsonProperty("show_title_on_frontend")
-        val showTitleOnFrontend: Boolean,
-
-        @JsonProperty("comments_enabled")
-        val commentsEnabled: Boolean,
-
-        @JsonProperty("genres")
-        val genres: List<Genre>,
-
-        @JsonProperty("studios")
-        val studios: List<Studio>,
-
-        @JsonProperty("seasons")
-        val seasons: List<Season>,
-
-        @JsonProperty("directors")
-        val directors: List<Person>,
-
-        @JsonProperty("cast")
-        val cast: List<Person>,
-
-        @JsonProperty("networks")
-        val networks: List<Network>,
-
-        @JsonProperty("countries")
-        val countries: List<Country>,
-
-        @JsonProperty("tags")
-        val tags: List<Tag>,
-
-        @JsonProperty("published_at")
-        val publishedAt: String
-    )
-
-    // Genre class
-    data class Genre(
-        @JsonProperty("name")
-        val name: String,
-
-        @JsonProperty("slug")
-        val slug: String,
-
-        @JsonProperty("id")
-        val id: Int,
-
-        @JsonProperty("label")
-        val label: String?
-    )
-
-    // Studio class
-    data class Studio(
-        @JsonProperty("name")
-        val name: String,
-
-        @JsonProperty("slug")
-        val slug: String,
-
-        @JsonProperty("id")
-        val id: Int,
-
-        @JsonProperty("label")
-        val label: String?
-    )
-
-    // Season class
-    data class Season(
-        @JsonProperty("name")
-        val name: String,
-
-        @JsonProperty("slug")
-        val slug: String,
-
-        @JsonProperty("id")
-        val id: Int,
-
-        @JsonProperty("label")
-        val label: String?
-    )
-
-    // Person class (for directors and cast)
-    data class Person(
-        @JsonProperty("name")
-        val name: String,
-
-        @JsonProperty("slug")
-        val slug: String,
-
-        @JsonProperty("id")
-        val id: Int,
-
-        @JsonProperty("label")
-        val label: String?
-    )
-
-    // Network class
-    data class Network(
-        @JsonProperty("name")
-        val name: String,
-
-        @JsonProperty("slug")
-        val slug: String,
-
-        @JsonProperty("id")
-        val id: Int,
-
-        @JsonProperty("label")
-        val label: String?
-    )
-
-    // Country class
-    data class Country(
-        @JsonProperty("name")
-        val name: String,
-
-        @JsonProperty("slug")
-        val slug: String,
-
-        @JsonProperty("id")
-        val id: Int,
-
-        @JsonProperty("label")
-        val label: String?
-    )
-
-    // Tag class
-    data class Tag(
-        @JsonProperty("name")
-        val name: String,
-
-        @JsonProperty("slug")
-        val slug: String,
-
-        @JsonProperty("id")
-        val id: Int,
-
-        @JsonProperty("label")
-        val label: String?
-    )
 }

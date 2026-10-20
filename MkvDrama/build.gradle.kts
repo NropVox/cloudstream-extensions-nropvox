@@ -1,21 +1,25 @@
-version = 1
+version = 3
 
 cloudstream {
     authors = listOf("NropVox")
     language = "en"
-    description =
-        "Download Korean, Chinese, Thai & Japanese dramas, movies & shows in HD with subs. Enjoy free, fast access to the latest content at MkvDrama.net."
+    description = "Asian dramas and movies from MKVDrama. Standalone download-panel and container resolution; some mirrors require browser verification."
+    status = 3
+    tvTypes = listOf("AsianDrama", "Movie")
+    iconUrl = "https://www.google.com/s2/favicons?domain=mkvdrama.net&sz=%size%"
+}
 
-    /**
-     * Status int as the following:
-     * 0: Down
-     * 1: Ok
-     * 2: Slow
-     * 3: Beta only
-     **/
-    status = 0 // will be 3 if unspecified
-    tvTypes = listOf("AsianDrama")
-    iconUrl = "https://mkvdrama.org/static/assets/favicon/apple-touch-icon.png"
+android {
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+}
 
-    isCrossPlatform = true
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
+    compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+}
+
+dependencies {
+    testImplementation("junit:junit:4.13.2")
 }

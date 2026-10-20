@@ -1,0 +1,10 @@
+version: 1
+name: MKVDrama direct series access contract
+slug: series
+protocol: http
+port: 4931
+interceptRequests: true
+scenarios:
+  - name: default
+    path: ./default.js
+    default: true

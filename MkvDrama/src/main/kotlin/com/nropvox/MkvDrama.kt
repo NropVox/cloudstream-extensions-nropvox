@@ -1,7 +1,6 @@
 package com.nropvox
 
 import com.fasterxml.jackson.databind.JsonNode
-import com.lagradost.api.Log
 import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
@@ -24,7 +23,6 @@ import com.lagradost.cloudstream3.newSearchResponseList
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import kotlinx.coroutines.CancellationException
 import org.jsoup.Jsoup
 import java.net.URI
 import java.net.URLEncoder
@@ -42,6 +40,7 @@ class MkvDrama : MainAPI() {
         "order=popular" to "Popular",
         "order=rating" to "Top rated",
     )
+    private val linkCache = MkvDramaCache()
 
     private fun image(value: String?): String? = value?.let { URI(mainUrl).resolve(it).toString() }
         ?.takeIf(MkvDramaDecoder::isHttp)?.let { url ->
@@ -147,28 +146,8 @@ class MkvDrama : MainAPI() {
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
         val target = mkvJson.readValue(data, MkvEpisodeData::class.java)
-        val session = MkvDramaSession()
-        val releases = MkvDramaDecoder.releases(session.panel(target.url), target.url).filter { item ->
-            when {
-                target.group != null -> item.group == target.group
-                target.episode == null -> !MkvDramaDecoder.isExtra(item.group)
-                MkvDramaDecoder.isExtra(item.group) -> false
-                else -> MkvDramaDecoder.span(item.group)?.let { target.episode in it.first..it.last } == true
-            }
-        }.sortedByDescending { Regex("(\\d{3,4})p", RegexOption.IGNORE_CASE).find(it.quality)?.groupValues?.get(1)?.toIntOrNull() ?: 0 }
-        val resolver = MkvDramaResolver(session)
-        var found = false
-        for (item in releases) {
-            try {
-                val range = MkvDramaDecoder.span(item.group)
-                val file = if (target.episode == null || range?.let { it.first == it.last } == true)
-                    MkvFile(item.url, episode = item.group, quality = item.quality) else null
-                found = resolver.resolve(item.url, target, "${item.group} · ${item.quality} · ${item.mirror}", item.quality,
-                    target.url, subtitleCallback, callback, file) || found
-            } catch (e: CancellationException) { throw e
-            } catch (e: Exception) { Log.w("MkvDrama", "${item.quality} ${item.mirror}: ${e.javaClass.simpleName}") }
-        }
-        if (!found) throw ErrorLoadingException("No playable MKVDrama mirror resolved. Shortener/Filecrypt verification or an unsupported file host may block this release.")
+        if (!MkvDramaLinks(linkCache, target, subtitleCallback, callback).play())
+            throw ErrorLoadingException("No playable MKVDrama mirror resolved. Shortener/Filecrypt verification or an unsupported file host may block this release.")
         return true
     }
 }

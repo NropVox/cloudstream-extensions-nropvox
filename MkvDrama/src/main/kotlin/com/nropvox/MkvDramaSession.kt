@@ -49,6 +49,7 @@ internal class MkvDramaSession(browserVerification: Boolean = true) {
     suspend fun request(
         url: String, referer: String? = null, json: JsonNode? = null,
         form: Map<String, String>? = null, post: Boolean = false, acceptJson: Boolean = false,
+        binary: Boolean = false,
     ): MkvResponse = withContext(Dispatchers.IO) {
         require(MkvDramaDecoder.isHttp(url)) { "Invalid request URL" }
         val builder = Request.Builder().url(url).header("User-Agent", USER_AGENT)
@@ -73,7 +74,8 @@ internal class MkvDramaSession(browserVerification: Boolean = true) {
             check(response.code != 429) { "MKVDrama rate limited. Retry after ${response.header("Retry-After") ?: "60"} seconds." }
             check(response.isSuccessful) { "HTTP ${response.code}: browser verification or an unavailable mirror at ${URI(url).host}" }
             val type = response.header("Content-Type").orEmpty()
-            check(!type.startsWith("video/") && !type.startsWith("application/octet-stream")) { "Unexpected media response" }
+            // DLC containers are small text files that hosts may label as binary; the size limit still applies.
+            check(!type.startsWith("video/") && (binary || !type.startsWith("application/octet-stream"))) { "Unexpected media response" }
             val body = response.body
             // Never fetch an entire media file if a supposed HTML endpoint changes behavior.
             val source = body.source()

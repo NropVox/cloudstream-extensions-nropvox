@@ -77,7 +77,7 @@ class GoPlay : MainAPI() {
                     ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
                 val items = list.select("#indexepisodes").mapNotNull { it.toSearchResult() }
                     .distinctBy { it.url }
-                if (items.isEmpty()) null else HomePageList(title, items)
+                if (items.isEmpty()) null else HomePageList(title, items, true)
             }
             return newHomePageResponse(lists, hasNext = false)
         }
@@ -86,7 +86,7 @@ class GoPlay : MainAPI() {
         val items = document.select(".browse_entry").mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
         return newHomePageResponse(
-            listOf(HomePageList(request.name, items)),
+            listOf(HomePageList(request.name, items, true)),
             hasNext = document.lastPage() > page
         )
     }

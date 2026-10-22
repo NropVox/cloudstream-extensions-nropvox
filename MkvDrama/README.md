@@ -31,6 +31,8 @@ hosts can require browser verification that has not been tested on a device.
 - Pixeldrain file URLs become direct video links after a metadata check. Other
   supported file hosts are handed to Cloudstream extractors. This does not
   establish that every host has a working extractor.
+- Tap the plugin's settings to save a Pixeldrain API key. When set, Pixeldrain
+  links are sent with it as HTTP Basic auth; without it they play anonymously.
 - Filecrypt supports already accessible file rows, same-host Link/Go navigation,
   DLC exports and movie CNL forms. Its proof-of-work/password gates are not
   implemented.

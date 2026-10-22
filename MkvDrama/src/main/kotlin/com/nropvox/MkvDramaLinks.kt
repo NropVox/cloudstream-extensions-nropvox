@@ -15,11 +15,12 @@ import kotlinx.coroutines.coroutineScope
 internal class MkvDramaLinks(
     private val cache: MkvDramaCache,
     private val target: MkvEpisodeData,
+    pixeldrainApiKey: String,
     private val subtitleCallback: (SubtitleFile) -> Unit,
     private val callback: (ExtractorLink) -> Unit,
 ) {
     private val session = MkvDramaSession()
-    private val resolver = MkvDramaResolver(session)
+    private val resolver = MkvDramaResolver(session, pixeldrainApiKey)
     // A container read once in this run is not read again by a later path.
     private val exported = mutableSetOf<String>()
 

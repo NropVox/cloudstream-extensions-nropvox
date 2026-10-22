@@ -1,5 +1,6 @@
 package com.nropvox
 
+import android.content.SharedPreferences
 import com.fasterxml.jackson.databind.JsonNode
 import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageResponse
@@ -27,7 +28,11 @@ import org.jsoup.Jsoup
 import java.net.URI
 import java.net.URLEncoder
 
-class MkvDrama : MainAPI() {
+const val PIXELDRAIN_API_KEY_PREF_KEY = "pixeldrain_api_key"
+
+class MkvDrama(
+    private val sharedPref: SharedPreferences? = null
+) : MainAPI() {
     override var mainUrl = "https://mkvdrama.net"
     override var name = "MkvDrama"
     override var lang = "en"
@@ -144,9 +149,12 @@ class MkvDrama : MainAPI() {
         }
     }
 
+    private fun pixeldrainApiKey(): String =
+        sharedPref?.getString(PIXELDRAIN_API_KEY_PREF_KEY, "")?.trim().orEmpty()
+
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
         val target = mkvJson.readValue(data, MkvEpisodeData::class.java)
-        if (!MkvDramaLinks(linkCache, target, subtitleCallback, callback).play())
+        if (!MkvDramaLinks(linkCache, target, pixeldrainApiKey(), subtitleCallback, callback).play())
             throw ErrorLoadingException("No playable MKVDrama mirror resolved. Shortener/Filecrypt verification or an unsupported file host may block this release.")
         return true
     }

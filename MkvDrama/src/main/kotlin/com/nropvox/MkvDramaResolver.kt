@@ -13,6 +13,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import okhttp3.Credentials
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.net.URI
@@ -20,7 +21,7 @@ import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 
 /** Follows release links to containers, exports container rows, and emits file-host links. Never requests media. */
-internal class MkvDramaResolver(private val session: MkvDramaSession) {
+internal class MkvDramaResolver(private val session: MkvDramaSession, private val pixeldrainApiKey: String = "") {
     private val emitted = Collections.synchronizedSet(mutableSetOf<String>())
     private val browserAttempts = AtomicInteger()
     private val browser = Mutex()
@@ -213,7 +214,9 @@ internal class MkvDramaResolver(private val session: MkvDramaSession) {
             if (emitted.add(direct)) callback(newExtractorLink("MkvDrama", "MKVDrama · Pixeldrain · $label", direct, ExtractorLinkType.VIDEO) {
                 this.quality = fileQuality
                 this.referer = ""
-                headers = mapOf("User-Agent" to USER_AGENT)
+                // Pixeldrain authenticates with HTTP Basic: empty user name, API key as the password.
+                headers = mapOf("User-Agent" to USER_AGENT) +
+                    if (pixeldrainApiKey.isBlank()) emptyMap() else mapOf("Authorization" to Credentials.basic("", pixeldrainApiKey))
             })
             return true
         }

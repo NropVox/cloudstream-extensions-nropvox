@@ -1,4 +1,4 @@
-version = 4
+version = 5
 
 cloudstream {
     authors = listOf("NropVox")
@@ -7,6 +7,8 @@ cloudstream {
     status = 3
     tvTypes = listOf("AsianDrama", "Movie")
     iconUrl = "https://www.google.com/s2/favicons?domain=mkvdrama.net&sz=%size%"
+
+    requiresResources = true
 }
 
 android {
@@ -21,5 +23,6 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEa
 }
 
 dependencies {
+    implementation("com.google.android.material:material:1.13.0")
     testImplementation("junit:junit:4.13.2")
 }

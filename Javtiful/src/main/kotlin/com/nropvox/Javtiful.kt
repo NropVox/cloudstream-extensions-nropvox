@@ -150,12 +150,15 @@ class Javtiful : MainAPI() {
         val res = app.get(data).document
         val configRaw = res.selectFirst("script#watch-config")?.data()
             ?.takeIf { it.isNotBlank() } ?: return false
-        val configData = runCatching {
+        val config = runCatching {
             mapper.readValue(configRaw, WatchConfig::class.java)
         }.getOrNull() ?: return false
-        val sources = configData.playerSources.orEmpty().filter { it.src.isNotBlank() }
+        val playback = config.playback ?: return false
 
-        configData.videoTitle?.substringBefore(" ")?.let { code ->
+        val sources = requestSources(playback, data)
+        if (sources.isEmpty()) return false
+
+        config.videoTitle?.substringBefore(" ")?.let { code ->
             loadExtractor("https://subtitlecat.com/?query=$code", subtitleCallback, callback)
         }
 
@@ -177,12 +180,50 @@ class Javtiful : MainAPI() {
             )
         }
 
-        return sources.isNotEmpty()
+        return true
+    }
+
+    // The watch page only carries a signed ticket; the player POSTs it to get the media URLs.
+    // A stale ticket is answered with 409 and a renewTicket to retry once.
+    private suspend fun requestSources(playback: Playback, pageUrl: String): List<PlayerSource> {
+        var ticket = playback.ticket
+        repeat(2) {
+            val response = app.post(
+                fixUrl(playback.endpoint),
+                data = mapOf("ticket" to ticket),
+                referer = pageUrl,
+                headers = mapOf(
+                    "X-Requested-With" to "XMLHttpRequest",
+                    "Accept" to "application/json"
+                )
+            )
+            val body = runCatching {
+                mapper.readValue(response.text, PlaybackResponse::class.java)
+            }.getOrNull() ?: return emptyList()
+            if (response.code == 409 && !body.renewTicket.isNullOrBlank()) {
+                ticket = body.renewTicket
+                return@repeat
+            }
+            if (!body.success) return emptyList()
+            return body.sources.orEmpty().filter { it.src.isNotBlank() }
+        }
+        return emptyList()
     }
 
     data class WatchConfig(
-        val playerSources: List<PlayerSource>? = null,
+        val playback: Playback? = null,
         val videoTitle: String? = null
+    )
+
+    data class Playback(
+        val endpoint: String,
+        val ticket: String
+    )
+
+    data class PlaybackResponse(
+        val success: Boolean = false,
+        val sources: List<PlayerSource>? = null,
+        val renewTicket: String? = null
     )
 
     data class PlayerSource(

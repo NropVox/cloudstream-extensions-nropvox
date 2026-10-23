@@ -54,3 +54,4 @@ with `ui` / `tap` / `swipe`. View ids are stable across portrait and landscape; 
   opens a chooser.
 - Local plugins live in `/sdcard/Cloudstream3/plugins/`. The app copies them into
   `/sdcard/Android/data/<pkg>/files/plugins/` when it loads them.
+- **`sources` can fail to open the dialog** when the control bar has a different number of buttons (the Source button's x moves, e.g. 1424 vs 1117 in landscape, and a blind tap hits "Video tracks"). Tap the view, then `tap player_sources_btt` by id instead of by coordinates.

@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.DubStatus
 import com.lagradost.cloudstream3.ErrorLoadingException
+import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
@@ -70,7 +71,8 @@ class Kayoanime(private val sharedPref: SharedPreferences? = null) : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val category = if (request.data.isEmpty()) "" else "&categories=${request.data}"
         val (posts, totalPages) = postsPage("per_page=$PAGE_SIZE&page=$page$category")
-        return newHomePageResponse(request.name, toSearchResponses(posts), hasNext = page < totalPages)
+        // The site's featured images are 16:9 episode screenshots, so the rows are laid out horizontally.
+        return newHomePageResponse(HomePageList(request.name, toSearchResponses(posts), isHorizontalImages = true), hasNext = page < totalPages)
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {

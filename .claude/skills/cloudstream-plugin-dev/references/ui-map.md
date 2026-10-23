@@ -33,6 +33,8 @@ with `ui` / `tap` / `swipe`. View ids are stable across portrait and landscape; 
   player. If you use it, restore it with `false` and `settings put system accelerometer_rotation 1`.
 - **Player controls auto-hide** faster than a dump/tap round trip, so `sources` shows them and
   taps in a single device shell call. Do the same by hand: `adb shell 'input tap 960 270; sleep 0.4; input tap X Y'`.
+- **Movie result pages**: in landscape `result_play_movie` sits below the cast row, so it is absent from `ui` until you swipe up (`swipe 960 800 960 200`). `play` with no number only works once it is visible.
+- **Back from a result page** returns to the search results (if you came from `psearch`), not to the previous player/result. Re-`tap` the card to reopen the title.
 - **Lists are virtualised.** A dump only sees visible rows (home rows, episode list, source list),
   so swipe and dump again. `rows`, `play N` and `sources` already do this.
 - **The home preview header** is tall in landscape, so it takes several swipes to reach the rows.

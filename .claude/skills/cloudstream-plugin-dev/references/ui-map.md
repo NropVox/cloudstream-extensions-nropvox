@@ -55,3 +55,6 @@ with `ui` / `tap` / `swipe`. View ids are stable across portrait and landscape; 
 - Local plugins live in `/sdcard/Cloudstream3/plugins/`. The app copies them into
   `/sdcard/Android/data/<pkg>/files/plugins/` when it loads them.
 - **`sources` can fail to open the dialog** when the control bar has a different number of buttons (the Source button's x moves, e.g. 1424 vs 1117 in landscape, and a blind tap hits "Video tracks"). Tap the view, then `tap player_sources_btt` by id instead of by coordinates.
+- **`sources` may list audio tracks instead** (e.g. `Hindi • 5.1 • E-AC3`) for MKV files with several audio tracks. If the names don't look like your ExtractorLinks, open the dialog by hand: tap `player_view` until `player_sources_btt` shows in `ui`, tap it by its dumped coordinates, then collect `#text1` names while swiping the left list (`swipe 519 850 519 300`).
+- **`rows` can report `0 visible` for a row that has cards** when a scroll step leaves the row title above the screen and its cards below it. Before suspecting the plugin, scroll to the row by hand and dump (found with 4KHDHub, 2026-10-28).
+- **`tap "<title>"` from search results can hit the search box**, because the typed query matches case-insensitively. Use `tap --exact "<Title>"`, or `--nth 1` when the query equals the title.

@@ -687,7 +687,8 @@ def cmd_provider(a):
               [n for n in rows if a.name.lower() in n["text"].lower()]
         if hit:
             sh(f"input tap {hit[0]['x']} {hit[0]['y']}")
-            print(f"selected {hit[0]['text']}; main page loading")
+            # Name the provider this replaced, so it can be re-selected when the session ends.
+            print(f"selected {hit[0]['text']} (was {fab[0]['text']}; re-select it when done); main page loading")
             return
         # The list is scrollable: swipe it up and look again.
         if rows:

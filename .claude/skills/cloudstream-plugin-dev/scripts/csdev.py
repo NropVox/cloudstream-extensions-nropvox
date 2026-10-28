@@ -5,6 +5,10 @@ Run from the plugin repo root:  python3 .claude/skills/cloudstream-plugin-dev/sc
 
 Commands (all print short, greppable output):
   devices                      list adb devices and the one that will be used
+  lease acquire [--wait S] [--note TEXT]
+                               take the exclusive device lease for $CSDEV_OWNER (waits up to S s if held)
+  lease release [--force]      give it back (--force: clear someone else's, only when the user says so)
+  lease status                 who holds the device, since when, from which worktree
   build   <Plugin>...          ./gradlew :<P>:make  (→ <P>/build/<P>.cs3)
   test    <Plugin>             ./gradlew :<P>:testDebugUnitTest
   deploy  <Plugin>... [--no-build]
@@ -22,8 +26,9 @@ Commands (all print short, greppable output):
   search <query>               open the in-app global search for query (cloudstreamsearch:// deep link)
   shot [name]                  screenshot → scratch dir; prints the path (Read it to see the screen)
   mark                         remember "now" so `log` only shows lines after it
-  log [--grep RE] [--all] [--tail N] [--follow-secs S]
-                               app logcat since the last mark, noise filtered; --all = whole buffer
+  log [--grep RE] [--plugin P] [--all] [--tail N] [--follow-secs S]
+                               app logcat since the last mark, noise filtered; --all = whole buffer;
+                               --plugin = only lines naming P (plus their stack traces)
   links                        summary of what the player tried: links, chosen source, errors
   wait <query> [--timeout S]   poll ui dumps until a node matches (or time out)
 
@@ -37,9 +42,16 @@ Screen-level (built on the above; view ids work in portrait and landscape):
   sources                      open the player's Source list, print every link + subtitle, close it
 
 Env: ANDROID_SERIAL (pick device), CS_PACKAGE (default com.lagradost.cloudstream3.prerelease.debug),
-     CSDEV_SCRATCH (where shots/dumps/state go; default /tmp/csdev).
+     CSDEV_OWNER (unique agent name; required for every command that touches the device),
+     CSDEV_SCRATCH (where shots/dumps/state go, in a per-owner subfolder; default /tmp/csdev),
+     CSDEV_LEASE_DIR (default ~/.cache/csdev), CSDEV_LEASE_TTL (idle seconds before a lease is stale; 600).
+
+Concurrency: one phone has one screen, one player and one plugin loader (`deploy` reloads every
+local plugin), so only the lease holder may drive it. build/test/devices/lease work without it.
 """
 import argparse
+import fcntl
+import json
 import os
 import re
 import shlex
@@ -49,9 +61,14 @@ import time
 import xml.etree.ElementTree as ET
 
 PKG = os.environ.get("CS_PACKAGE", "com.lagradost.cloudstream3.prerelease.debug")
-SCRATCH = os.environ.get("CSDEV_SCRATCH", "/tmp/csdev")
+OWNER = re.sub(r"[^\w.-]", "_", os.environ.get("CSDEV_OWNER", "").strip())
+# Subagents share one session scratchpad, so each owner gets its own folder (log mark, ui dump, shots).
+SCRATCH = os.path.join(os.environ.get("CSDEV_SCRATCH", "/tmp/csdev"), OWNER or "_noowner")
 DEVICE_PLUGINS = "/sdcard/Cloudstream3/plugins"
+DEVICE_UI = f"/sdcard/csdev-ui-{OWNER or 'noowner'}.xml"
 STATE_MARK = os.path.join(SCRATCH, "logmark")
+LEASE_DIR = os.environ.get("CSDEV_LEASE_DIR", os.path.expanduser("~/.cache/csdev"))
+LEASE_TTL = float(os.environ.get("CSDEV_LEASE_TTL", 600))
 # Lines from the app that are never interesting while debugging a plugin.
 NOISE = re.compile(
     r"chromium|TranClassInfo|Resources|ViewRootImpl|BLASTBufferQueue|Choreographer|InsetsController|"
@@ -128,15 +145,122 @@ def view(uri):
     return sh(f"am start -a android.intent.action.VIEW -d {shlex.quote(uri)} -p {PKG}")
 
 
+# ----------------------------------------------------------------- lease ----
+# A device-wide lock shared by every worktree and session: {owner, since, heartbeat, cwd, note}.
+# It covers a whole device session (tap → screen → play → links depend on each other), not single
+# commands. Every device command refreshes the heartbeat; a lease idle for LEASE_TTL is stale and
+# can be taken over, so a crashed agent can't hold the phone forever.
+
+def lease_path():
+    os.makedirs(LEASE_DIR, exist_ok=True)
+    return os.path.join(LEASE_DIR, "lease-" + re.sub(r"[^\w.-]", "_", serial()) + ".json")
+
+
+def with_lease_file(fn):
+    """Run fn(current_lease_or_None) under an flock; if it returns a dict, write it; if False, delete."""
+    path = lease_path()
+    with open(path + ".lock", "w") as lk:
+        fcntl.flock(lk, fcntl.LOCK_EX)
+        try:
+            cur = json.load(open(path)) if os.path.exists(path) else None
+        except (ValueError, OSError):
+            cur = None
+        new = fn(cur)
+        if new is False:
+            if os.path.exists(path):
+                os.remove(path)
+        elif isinstance(new, dict):
+            with open(path + ".tmp", "w") as f:
+                json.dump(new, f)
+            os.replace(path + ".tmp", path)
+        return cur
+
+
+def stale(lease):
+    return time.time() - lease["heartbeat"] > LEASE_TTL
+
+
+def describe(lease):
+    idle = int(time.time() - lease["heartbeat"])
+    return (f"{lease['owner']} since {time.strftime('%H:%M:%S', time.localtime(lease['since']))}, "
+            f"idle {idle}s{' (STALE)' if stale(lease) else ''}, cwd {lease.get('cwd', '?')}"
+            + (f", note: {lease['note']}" if lease.get("note") else ""))
+
+
+def need_owner():
+    if not OWNER:
+        die("CSDEV_OWNER is not set. Export a name unique to this agent (e.g. CSDEV_OWNER=kayoanime-fix) "
+            "and `lease acquire` before touching the device.")
+
+
+def hold_lease():
+    """Exit unless OWNER holds the device lease; refresh its heartbeat."""
+    need_owner()
+
+    def check(cur):
+        if cur and cur["owner"] == OWNER:
+            return dict(cur, heartbeat=time.time())
+        return None
+    cur = with_lease_file(check)
+    if not cur or cur["owner"] != OWNER:
+        die(f"{OWNER} does not hold the device lease ({'held by ' + describe(cur) if cur else 'free'}). "
+            f"Run `lease acquire` first. Don't drive the phone without it: another agent may be on it.")
+
+
+def cmd_lease(a):
+    if a.action == "status":
+        cur = with_lease_file(lambda c: None)
+        print(f"{serial()}: " + (describe(cur) if cur else "free"))
+        return
+    need_owner()
+    if a.action == "release":
+        def rel(cur):
+            if cur and (cur["owner"] == OWNER or a.force):
+                return False
+            return None
+        cur = with_lease_file(rel)
+        if not cur:
+            print("lease was already free")
+        elif cur["owner"] == OWNER or a.force:
+            sh(f"rm -f {DEVICE_UI}")
+            print(f"released lease of {cur['owner']} on {serial()}")
+        else:
+            die(f"not yours: held by {describe(cur)}")
+        return
+    # acquire
+    end, told = time.time() + a.wait, False
+    while True:
+        now = time.time()
+
+        def take(cur):
+            if cur is None or cur["owner"] == OWNER or stale(cur):
+                mine = cur if cur and cur["owner"] == OWNER else {}
+                return {"owner": OWNER, "since": mine.get("since", now), "heartbeat": now,
+                        "cwd": os.getcwd(), "note": a.note or mine.get("note", "")}
+            return None
+        cur = with_lease_file(take)
+        if cur is None or cur["owner"] == OWNER or stale(cur):
+            took = f" (took over stale lease of {cur['owner']})" if cur and cur["owner"] != OWNER else ""
+            print(f"lease acquired by {OWNER} on {serial()}{took}")
+            return
+        if now >= end:
+            die(f"device busy: held by {describe(cur)}. Work on code/tests meanwhile and retry "
+                f"`lease acquire --wait N`; it frees on release or after {int(LEASE_TTL)}s idle.")
+        if not told:
+            print(f"waiting for lease held by {describe(cur)}…", flush=True)
+            told = True
+        time.sleep(5)
+
+
 # -------------------------------------------------------------------- ui ----
 
 def dump():
-    """Fresh uiautomator dump → list of node dicts. A stale /sdcard/ui.xml is deleted first."""
+    """Fresh uiautomator dump → list of node dicts. A stale dump file is deleted first."""
     local = os.path.join(SCRATCH, "ui.xml")
     for attempt in range(4):
-        sh("rm -f /sdcard/ui.xml")
-        sh("uiautomator dump /sdcard/ui.xml", timeout=30)
-        data = adb("exec-out", "cat /sdcard/ui.xml").stdout
+        sh(f"rm -f {DEVICE_UI}")
+        sh(f"uiautomator dump {DEVICE_UI}", timeout=30)
+        data = adb("exec-out", f"cat {DEVICE_UI}").stdout
         if data.strip().startswith("<?xml") and "</hierarchy>" in data:
             with open(local, "w") as f:
                 f.write(data)
@@ -345,6 +469,7 @@ def cmd_test(a):
 def cmd_deploy(a):
     if not a.no_build:
         cmd_build(a)
+    hold_lease()  # after the build: compiling doesn't need the phone
     ensure_app()
     for p in a.plugins:
         src = f"{p}/build/{p}.cs3"
@@ -410,6 +535,21 @@ def app_lines(text, extra=None):
     return out
 
 
+def plugin_lines(lines, name):
+    """Lines naming the plugin (tag, class, URL…) plus the stack-trace lines that follow them."""
+    rx, out, follow = re.compile(re.escape(name), re.I), [], False
+    for l in lines:
+        msg = l.split(": ", 1)[-1].lstrip()
+        if rx.search(l):
+            out.append(l)
+            follow = True
+        elif follow and msg.startswith(("at ", "Caused by", "...")):
+            out.append(l)
+        else:
+            follow = False
+    return out
+
+
 def cmd_mark(a):
     print("log mark at " + mark())
 
@@ -418,6 +558,8 @@ def cmd_log(a):
     if a.follow_secs:
         time.sleep(a.follow_secs)
     lines = app_lines(logcat_since(a.all), a.grep)
+    if a.plugin:
+        lines = plugin_lines(lines, a.plugin)
     print("\n".join(lines[-a.tail:]) if lines else "(no matching lines; note this phone drops Log.d — use Log.i/w)")
 
 
@@ -713,6 +855,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("devices").set_defaults(f=cmd_devices)
+    p = sub.add_parser("lease"); p.add_argument("action", choices=["acquire", "release", "status"])
+    p.add_argument("--wait", type=float, default=90); p.add_argument("--note"); p.add_argument("--force", action="store_true"); p.set_defaults(f=cmd_lease)
     p = sub.add_parser("build"); p.add_argument("plugins", nargs="+"); p.set_defaults(f=cmd_build)
     p = sub.add_parser("test"); p.add_argument("plugin"); p.set_defaults(f=cmd_test)
     p = sub.add_parser("deploy"); p.add_argument("plugins", nargs="+"); p.add_argument("--no-build", action="store_true"); p.set_defaults(f=cmd_deploy)
@@ -731,7 +875,7 @@ def main():
     p = sub.add_parser("search"); p.add_argument("query"); p.set_defaults(f=cmd_search)
     p = sub.add_parser("shot"); p.add_argument("name", nargs="?"); p.set_defaults(f=cmd_shot)
     sub.add_parser("mark").set_defaults(f=cmd_mark)
-    p = sub.add_parser("log"); p.add_argument("--grep"); p.add_argument("--all", action="store_true")
+    p = sub.add_parser("log"); p.add_argument("--grep"); p.add_argument("--plugin"); p.add_argument("--all", action="store_true")
     p.add_argument("--tail", type=int, default=120); p.add_argument("--follow-secs", type=float, default=0); p.set_defaults(f=cmd_log)
     sub.add_parser("links").set_defaults(f=cmd_links)
     sub.add_parser("screen").set_defaults(f=cmd_screen)
@@ -742,6 +886,9 @@ def main():
     p = sub.add_parser("play"); p.add_argument("episode", type=int, nargs="?"); p.set_defaults(f=cmd_play)
     p = sub.add_parser("sources"); p.add_argument("--pages", type=int, default=4); p.set_defaults(f=cmd_sources)
     a = ap.parse_args()
+    # deploy takes the lease itself, after building.
+    if a.cmd not in ("devices", "lease", "build", "test", "deploy"):
+        hold_lease()
     a.f(a)
 
 

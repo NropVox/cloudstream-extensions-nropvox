@@ -22,16 +22,20 @@ zsh doesn't split `$VAR` into words, so define a function rather than a variable
 
 ```bash
 cs(){ python3 /mnt/AJ/Projects/cloudstream-extensions-istarvin/.claude/skills/cloudstream-plugin-dev/scripts/csdev.py "$@"; }
-export CSDEV_SCRATCH=<your scratchpad dir>/csdev   # screenshots, ui dumps, log mark
+export CSDEV_SCRATCH=<your scratchpad dir>/csdev   # screenshots, ui dumps, log mark (per-owner subfolder)
+export CSDEV_OWNER=<plugin>-<task>                 # unique to you, e.g. kayoanime-fix; same in every call
 cs devices      # which phone, and whether the Cloudstream build is installed
+cs lease status # is another agent on the phone right now?
 ```
 
-Shell functions don't persist between Bash calls, so repeat the `cs(){…}` line at the start of
-each call. Run from the repo root, because gradle tasks and the `<Plugin>/build/` paths are relative to it.
+Shell functions and exports don't persist between Bash calls, so repeat the `cs(){…}` and
+`export` lines at the start of each call, with the **same** `CSDEV_OWNER` every time. Run from
+the repo root (or your worktree root), because gradle tasks and the `<Plugin>/build/` paths are relative to it.
 `cs --help` lists every command. The ones you'll use most:
 
 | Command | What it proves |
 |---|---|
+| `cs lease acquire` / `release` / `status` | you own the phone; every device command refuses to run without it |
 | `cs build P` / `cs test P` | compiles to `P/build/P.cs3` / parser unit tests pass |
 | `cs deploy P` | builds, pushes and hot-reloads the plugin, then waits for `Loaded plugin P.cs3 successfully` and prints the stack trace if loading failed |
 | `cs provider P` | P appears in the home picker and is selected |
@@ -40,7 +44,7 @@ each call. Run from the repo root, because gradle tasks and the `<Plugin>/build/
 | `cs tap "<title>"` then `cs screen` | `load`: the result page title and episode count, or the error text the app shows |
 | `cs play [N]` then `cs links` | `loadLinks`: which link the player picked, time to first frame, subtitles, errors |
 | `cs sources` | every ExtractorLink and subtitle the plugin emitted, as listed in the player |
-| `cs mark` / `cs log [--grep RE]` | app logcat since the mark, with framework noise removed |
+| `cs mark` / `cs log [--grep RE] [--plugin P]` | app logcat since the mark, with framework noise removed |
 | `cs ui` / `cs tap q` / `cs shot` | raw driving when a screen command doesn't fit |
 
 When a screen command fails or you need to drive the app by hand, read `references/ui-map.md`.
@@ -53,10 +57,32 @@ The phone is the user's own, signed in to their accounts. Treat it that way:
 - Touch only Cloudstream. `tap` refuses nodes from other apps for this reason. If a Google
   sign-in prompt, permission dialog or anything unexpected covers the app, take a `shot`, tell the
   user what it is and wait for them. Account and security prompts are never yours to answer.
-- Drive one device session at a time. Parallel agents on one phone corrupt each other's state.
+- Drive the phone only while you hold the lease (see "Several agents at once"). It has one
+  screen, one player and one plugin loader, so another agent's taps or `deploy` would wreck your session.
 - Leave the phone as you found it. If you enabled NSFW in Preferred media or the picker, changed
   the selected provider, forced orientation, or switched `Log.d` to `Log.i` for a debug build,
   undo it before you finish.
+
+## Several agents at once
+
+Recon, code, `cs build` and `cs test` run fine in parallel. The phone doesn't: `deploy` hot-reloads
+**every** local plugin, and the screen, player, selected provider and logcat are all shared. So:
+
+- **Own worktree per agent.** Work in a git worktree (the Agent tool's `isolation: "worktree"`, or
+  `git worktree add ../cs-<task> -b <task>`), so edits and `build/` outputs don't collide. Copy the
+  gitignored `local.properties` from the main checkout into the worktree root, or gradle can't find
+  the SDK. Untracked plugin folders aren't in a new worktree either, so commit or copy them in first.
+  Two agents shouldn't change the same plugin, or `shared/` code that more than one plugin compiles in.
+- **Lease the phone for a whole device session**, not per command: `tap` → `screen` → `play` → `links`
+  depend on each other. `cs lease acquire --note "<Plugin>: <what>"` waits up to 90 s (`--wait N`).
+  If it says busy, go back to code or tests and try again later. Never work around it with raw `adb`.
+- Every device command refreshes the lease. One idle for 10 min (`CSDEV_LEASE_TTL`) is stale and the
+  next `acquire` takes it over, so don't hold it while you write a long fix. `cs lease release`, edit
+  and rebuild, then `acquire` again. If someone took over a stale lease of yours, device commands say
+  so. Acquire again, and since the phone state is no longer yours, re-`deploy` before trusting anything.
+- Release only **after** restoring the phone (see "Finishing"): the next agent expects the user's settings.
+- `cs lease release --force` clears another agent's lease. Use it only when the user tells you to.
+- If you're the parent splitting work across subagents, give each one a different `CSDEV_OWNER`.
 
 ## Workflow: new plugin for a site
 
@@ -95,6 +121,7 @@ called end to end in tests, and link emission is verified on the phone.
 ### 4. Deploy and verify on the phone
 
 ```bash
+cs lease acquire --note "<Name>: verify"   # first: nothing below runs without it
 cs deploy <Name>          # must print "loaded <Name>.cs3"
 cs provider <Name>        # if missing from the picker: wrong tvTypes chip, NSFW off, or the load failed
 cs rows                   # every mainPageOf row present, with plausible titles
@@ -142,7 +169,7 @@ to `loadLinks` can break `load`.
 
 ## Finishing
 
-Restore the phone (see "Device etiquette"), run `cs test <Name>` once more if it has tests, and
+Restore the phone (see "Device etiquette"), then `cs lease release`. Run `cs test <Name>` once more if it has tests, and
 report to the user with a short matrix, so they can see what was checked and what wasn't:
 
 ```

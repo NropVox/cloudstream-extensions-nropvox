@@ -42,10 +42,14 @@ object NexdriveParser {
     fun vcloudNext(landingHtml: String, decode: (String) -> String): String? =
         doubleBase64.find(landingHtml)?.groupValues?.get(1)?.let { decode(decode(it)) }
 
-    /** HubCloud drive page: the `#download` button (also in `var url`) opens the same server list as V-Cloud. */
+    /**
+     * HubCloud drive page: the `#download` button (also in `var url`) opens the same server list as V-Cloud.
+     * `/video/<id>` pages have neither; their "Generate Direct Download Link" button goes to `gamerxyt.com/hubcloud.php`.
+     */
     fun hubcloudNext(doc: Document): String? =
         doc.selectFirst("a#download")?.attr("href")?.takeIf { it.startsWith("http") }
             ?: hubcloudUrl.find(doc.html())?.groupValues?.get(1)
+            ?: doc.selectFirst("a[href*=hubcloud.php]")?.attr("href")?.takeIf { it.startsWith("http") }
 
     /** V-Drive share id of `https://one.vegadrive.app/s/<id>`. */
     fun vdriveId(url: String): String? = vdriveShare.find(url)?.groupValues?.get(1)

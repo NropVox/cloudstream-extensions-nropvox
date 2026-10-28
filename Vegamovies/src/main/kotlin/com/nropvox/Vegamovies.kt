@@ -36,7 +36,7 @@ class Vegamovies : MainAPI() {
     // The site rotates its domain; the nexdrive, fastdl and vcloud hosts are always read from the page links.
     override var mainUrl = "https://new1.vegamovies.lease"
     override var name = "Vegamovies"
-    override var lang = "hi"
+    override var lang = "en"
     override val hasMainPage = true
     override val hasQuickSearch = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Anime)

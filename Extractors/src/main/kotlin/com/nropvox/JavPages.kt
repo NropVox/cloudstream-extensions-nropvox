@@ -19,6 +19,8 @@ import com.lagradost.cloudstream3.utils.getAndUnpack
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import org.jsoup.Jsoup
 
 /*
@@ -45,30 +47,32 @@ class JavtifulPage : ExtractorApi() {
         }.getOrNull() ?: return
         val playback = config.playback ?: return
 
-        val sources = requestSources(playback, url)
-        if (sources.isEmpty()) return
-
-        config.videoTitle?.substringBefore(" ")?.let { code ->
-            SubtitleCat().getUrl(code, null, subtitleCallback, callback)
-        }
-
-        sources.forEach { source ->
-            val sourceUrl = fixUrl(source.src)
-            callback(
-                newExtractorLink(
-                    source = name,
-                    name = name,
-                    url = sourceUrl
-                ) {
-                    this.quality = source.size ?: Qualities.Unknown.value
-                    this.referer = "$mainUrl/"
-                    this.type = if (
-                        source.type?.contains("mpegurl", ignoreCase = true) == true ||
-                        sourceUrl.substringBefore('?').endsWith(".m3u8", ignoreCase = true)
-                    ) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+        runAllAsync(
+            {
+                config.videoTitle?.substringBefore(" ")?.let { code ->
+                    SubtitleCat().getUrl(code, null, subtitleCallback, callback)
                 }
-            )
-        }
+            },
+            {
+                requestSources(playback, url).forEach { source ->
+                    val sourceUrl = fixUrl(source.src)
+                    callback(
+                        newExtractorLink(
+                            source = name,
+                            name = name,
+                            url = sourceUrl
+                        ) {
+                            this.quality = source.size ?: Qualities.Unknown.value
+                            this.referer = "$mainUrl/"
+                            this.type = if (
+                                source.type?.contains("mpegurl", ignoreCase = true) == true ||
+                                sourceUrl.substringBefore('?').endsWith(".m3u8", ignoreCase = true)
+                            ) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
+                        }
+                    )
+                }
+            }
+        )
     }
 
     // The watch page only carries a signed ticket; the player POSTs it to get the media URLs.
@@ -144,61 +148,70 @@ class SexTBPage : ExtractorApi() {
         val code = res.document.select(".film-info-title a").attr("href")
             .substringBefore("?").substringBefore("#").trimEnd('/').substringAfterLast("/")
 
-        val tasks = mutableListOf<suspend () -> Unit>()
-        tasks.add { SubtitleCat().getUrl(code, null, subtitleCallback, callback) }
-
-        val filmId = Regex("""var filmId\s*=\s*(\d+)""").find(res.text)?.groupValues?.get(1)
-        var currentPt = Regex("""__pt\s*=\s*['"](.*?)['"]""").find(res.text)?.groupValues?.get(1)
-        var currentPk = Regex("""__pk\s*=\s*['"](.*?)['"]""").find(res.text)?.groupValues?.get(1)
-        val token = res.document.selectFirst("meta[name=_token]")?.attr("value")
-        val socket = res.document.selectFirst("meta[name=_socket]")?.attr("value")
-        val playerUrls = mutableSetOf<String>()
-        val cookies = res.cookies.toMutableMap()
-        res.document.selectFirst("#sextb-player iframe[src]")?.attr("src")
-            ?.takeIf { it.isNotBlank() }?.let { fixUrl(it) }
-            ?.takeIf { !it.contains("upgrade") }?.let { iframeUrl ->
-                playerUrls.add(iframeUrl)
-                tasks.add { loadExtractor(iframeUrl, url, subtitleCallback, callback) }
-            }
-
-        if (filmId != null && currentPt != null && currentPk != null && token != null && socket != null) {
-            // The site rotates the session player token and XOR key after every request, so these stay sequential.
-            for (ep in res.document.select(".episode-list button.btn-player:not(.vip)")) {
+        coroutineScope {
+            // Each player starts as soon as it is known instead of waiting for the whole token chain below.
+            fun start(task: suspend () -> Unit) = launch {
                 try {
-                    val response = app.post(
-                        "$mainUrl/ajax/player",
-                        // The player endpoint rejects requests without the watch page's session cookie (E_SID).
-                        cookies = cookies,
-                        headers = commonHeaders + mapOf(
-                            "Referer" to url,
-                            "X-Requested-With" to "XMLHttpRequest",
-                            "Authorization" to "Basic ${base64Encode("$token:$socket".toByteArray(Charsets.UTF_8))}",
-                            "Origin" to mainUrl
-                        ),
-                        data = mapOf(
-                            "episode" to ep.attr("data-id"),
-                            "filmId" to ep.attr("data-source").ifEmpty { filmId },
-                            "pt" to currentPt.orEmpty()
-                        )
-                    ).also { cookies += it.cookies }.parsedSafe<PlayerResponse>() ?: continue
-                    val decryptionKey = currentPk.orEmpty()
-                    currentPt = response.nextPt ?: currentPt
-                    currentPk = response.nextPk ?: currentPk
-                    val encrypted = response.playerEnc ?: continue
-                    val player = Jsoup.parse(decryptPlayer(encrypted, decryptionKey))
-                    val iframeUrl = player.selectFirst("iframe[src]")?.attr("src")
-                        ?.takeIf { it.isNotBlank() }?.let { fixUrl(it) } ?: continue
-                    if (iframeUrl.contains("upgrade") || !playerUrls.add(iframeUrl)) continue
-                    tasks.add { loadExtractor(iframeUrl, url, subtitleCallback, callback) }
+                    task()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     Log.d(name, "${e.message}")
                 }
             }
-        }
+            start { SubtitleCat().getUrl(code, null, subtitleCallback, callback) }
 
-        runAllAsync(*tasks.toTypedArray())
+            val filmId = Regex("""var filmId\s*=\s*(\d+)""").find(res.text)?.groupValues?.get(1)
+            var currentPt = Regex("""__pt\s*=\s*['"](.*?)['"]""").find(res.text)?.groupValues?.get(1)
+            var currentPk = Regex("""__pk\s*=\s*['"](.*?)['"]""").find(res.text)?.groupValues?.get(1)
+            val token = res.document.selectFirst("meta[name=_token]")?.attr("value")
+            val socket = res.document.selectFirst("meta[name=_socket]")?.attr("value")
+            val playerUrls = mutableSetOf<String>()
+            val cookies = res.cookies.toMutableMap()
+            res.document.selectFirst("#sextb-player iframe[src]")?.attr("src")
+                ?.takeIf { it.isNotBlank() }?.let { fixUrl(it) }
+                ?.takeIf { !it.contains("upgrade") }?.let { iframeUrl ->
+                    playerUrls.add(iframeUrl)
+                    start { loadExtractor(iframeUrl, url, subtitleCallback, callback) }
+                }
+
+            if (filmId != null && currentPt != null && currentPk != null && token != null && socket != null) {
+                // The site rotates the session player token and XOR key after every request, so these stay sequential.
+                for (ep in res.document.select(".episode-list button.btn-player:not(.vip)")) {
+                    try {
+                        val response = app.post(
+                            "$mainUrl/ajax/player",
+                            // The player endpoint rejects requests without the watch page's session cookie (E_SID).
+                            cookies = cookies,
+                            headers = commonHeaders + mapOf(
+                                "Referer" to url,
+                                "X-Requested-With" to "XMLHttpRequest",
+                                "Authorization" to "Basic ${base64Encode("$token:$socket".toByteArray(Charsets.UTF_8))}",
+                                "Origin" to mainUrl
+                            ),
+                            data = mapOf(
+                                "episode" to ep.attr("data-id"),
+                                "filmId" to ep.attr("data-source").ifEmpty { filmId },
+                                "pt" to currentPt.orEmpty()
+                            )
+                        ).also { cookies += it.cookies }.parsedSafe<PlayerResponse>() ?: continue
+                        val decryptionKey = currentPk.orEmpty()
+                        currentPt = response.nextPt ?: currentPt
+                        currentPk = response.nextPk ?: currentPk
+                        val encrypted = response.playerEnc ?: continue
+                        val player = Jsoup.parse(decryptPlayer(encrypted, decryptionKey))
+                        val iframeUrl = player.selectFirst("iframe[src]")?.attr("src")
+                            ?.takeIf { it.isNotBlank() }?.let { fixUrl(it) } ?: continue
+                        if (iframeUrl.contains("upgrade") || !playerUrls.add(iframeUrl)) continue
+                        start { loadExtractor(iframeUrl, url, subtitleCallback, callback) }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.d(name, "${e.message}")
+                    }
+                }
+            }
+        }
     }
 
     private fun decryptPlayer(encoded: String, key: String): String {
@@ -239,15 +252,20 @@ class MissAVPage : ExtractorApi() {
         val res = app.get(url, interceptor = cloudflareInterceptor)
         val playlistId = playlistIdPattern.find(getAndUnpack(res.text))?.groupValues?.get(1) ?: return
 
-        res.document.selectFirst("h1.text-base")?.text()?.trim()?.substringBefore(" ")?.let { code ->
-            SubtitleCat().getUrl(code, null, subtitleCallback, callback)
-        }
-
-        generateM3u8(
-            source = name,
-            streamUrl = "https://surrit.com/$playlistId/playlist.m3u8",
-            referer = mainUrl,
-            headers = mapOf("Referer" to mainUrl)
-        ).forEach(callback)
+        runAllAsync(
+            {
+                res.document.selectFirst("h1.text-base")?.text()?.trim()?.substringBefore(" ")?.let { code ->
+                    SubtitleCat().getUrl(code, null, subtitleCallback, callback)
+                }
+            },
+            {
+                generateM3u8(
+                    source = name,
+                    streamUrl = "https://surrit.com/$playlistId/playlist.m3u8",
+                    referer = mainUrl,
+                    headers = mapOf("Referer" to mainUrl)
+                ).forEach(callback)
+            }
+        )
     }
 }

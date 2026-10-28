@@ -15,16 +15,12 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.fixUrl
 import com.lagradost.cloudstream3.fixUrlNull
 import com.lagradost.cloudstream3.mainPageOf
-import com.lagradost.cloudstream3.mapper
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newSearchResponseList
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
-import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.loadExtractor
-import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 
@@ -141,94 +137,15 @@ class Javtiful : MainAPI() {
         }
     }
 
+    // Resolved by the Extractors plugin's JavtifulPage, which JavStream shares.
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val res = app.get(data).document
-        val configRaw = res.selectFirst("script#watch-config")?.data()
-            ?.takeIf { it.isNotBlank() } ?: return false
-        val config = runCatching {
-            mapper.readValue(configRaw, WatchConfig::class.java)
-        }.getOrNull() ?: return false
-        val playback = config.playback ?: return false
-
-        val sources = requestSources(playback, data)
-        if (sources.isEmpty()) return false
-
-        config.videoTitle?.substringBefore(" ")?.let { code ->
-            loadExtractor("https://subtitlecat.com/?query=$code", subtitleCallback, callback)
-        }
-
-        sources.forEach { source ->
-            val url = fixUrl(source.src)
-            callback(
-                newExtractorLink(
-                    source = this.name,
-                    name = this.name,
-                    url = url
-                ) {
-                    this.quality = source.size ?: Qualities.Unknown.value
-                    this.referer = "$mainUrl/"
-                    this.type = if (
-                        source.type?.contains("mpegurl", ignoreCase = true) == true ||
-                        url.substringBefore('?').endsWith(".m3u8", ignoreCase = true)
-                    ) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO
-                }
-            )
-        }
-
-        return true
+        var found = false
+        loadExtractor(data, subtitleCallback) { found = true; callback(it) }
+        return found
     }
-
-    // The watch page only carries a signed ticket; the player POSTs it to get the media URLs.
-    // A stale ticket is answered with 409 and a renewTicket to retry once.
-    private suspend fun requestSources(playback: Playback, pageUrl: String): List<PlayerSource> {
-        var ticket = playback.ticket
-        repeat(2) {
-            val response = app.post(
-                fixUrl(playback.endpoint),
-                data = mapOf("ticket" to ticket),
-                referer = pageUrl,
-                headers = mapOf(
-                    "X-Requested-With" to "XMLHttpRequest",
-                    "Accept" to "application/json"
-                )
-            )
-            val body = runCatching {
-                mapper.readValue(response.text, PlaybackResponse::class.java)
-            }.getOrNull() ?: return emptyList()
-            if (response.code == 409 && !body.renewTicket.isNullOrBlank()) {
-                ticket = body.renewTicket
-                return@repeat
-            }
-            if (!body.success) return emptyList()
-            return body.sources.orEmpty().filter { it.src.isNotBlank() }
-        }
-        return emptyList()
-    }
-
-    data class WatchConfig(
-        val playback: Playback? = null,
-        val videoTitle: String? = null
-    )
-
-    data class Playback(
-        val endpoint: String,
-        val ticket: String
-    )
-
-    data class PlaybackResponse(
-        val success: Boolean = false,
-        val sources: List<PlayerSource>? = null,
-        val renewTicket: String? = null
-    )
-
-    data class PlayerSource(
-        val src: String,
-        val type: String? = null,
-        val size: Int? = null
-    )
 }

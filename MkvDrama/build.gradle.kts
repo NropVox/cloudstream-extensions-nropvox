@@ -11,18 +11,6 @@ cloudstream {
     requiresResources = true
 }
 
-android {
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-}
-
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
-    compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
-}
-
 dependencies {
     implementation("com.google.android.material:material:1.13.0")
-    testImplementation("junit:junit:4.13.2")
 }

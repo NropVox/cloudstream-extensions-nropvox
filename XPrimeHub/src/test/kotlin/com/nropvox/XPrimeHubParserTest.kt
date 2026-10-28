@@ -80,9 +80,9 @@ class XPrimeHubParserTest {
         )
         val links = XPrimeHubParser.hostLinks(doc)
         assertEquals(
-            listOf(XPrimeHubParser.Host.GDIRECT, XPrimeHubParser.Host.VCLOUD, XPrimeHubParser.Host.VDRIVE),
-            links.map { XPrimeHubParser.host(it) }
+            listOf(NexdriveParser.Host.GDIRECT, NexdriveParser.Host.VCLOUD, NexdriveParser.Host.VDRIVE),
+            links.map { NexdriveParser.host(it) }
         )
-        assertEquals("pwnWFjFUkmWg", XPrimeHubParser.vdriveId(links[2]))
+        assertEquals("pwnWFjFUkmWg", NexdriveParser.vdriveId(links[2]))
     }
 }

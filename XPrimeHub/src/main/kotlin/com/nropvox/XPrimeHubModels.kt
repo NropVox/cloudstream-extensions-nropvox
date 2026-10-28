@@ -25,24 +25,6 @@ data class XphEmbedded(@JsonProperty("wp:featuredmedia") val media: List<XphMedi
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class XphMedia(@JsonProperty("source_url") val sourceUrl: String? = null)
 
-/** V-Drive `GET /api/file/<id>`: which mirror providers hold the file (`ready`, `pending`, `failed`). */
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class XphVdFile(val providers: List<XphVdProvider>? = null)
-
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class XphVdProvider(val provider: String? = null, val status: String? = null)
-
-/** V-Drive `GET /download-link/<id>/skydrop`: `{"ready":false,"retry_after_ms":2500}` until the bridge has the file. */
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class XphVdLink(
-    @JsonProperty("download_url") val url: String? = null,
-    @JsonProperty("retry_after_ms") val retryAfterMs: Long? = null,
-)
-
-/** Pixeldrain `GET /api/file/<id>/info`; taken-down files answer 451 on download. */
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class XphPdInfo(@JsonProperty("can_download") val canDownload: Boolean? = null)
-
 /** A download heading of a post with the nexdrive buttons below it. */
 data class XphGroup(val heading: String, val buttons: List<XphPage>)
 

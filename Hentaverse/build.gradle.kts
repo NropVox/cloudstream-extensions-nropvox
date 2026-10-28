@@ -8,18 +8,3 @@ cloudstream {
     tvTypes = listOf("NSFW")
     iconUrl = "https://www.google.com/s2/favicons?domain=hentaverse.com&sz=%size%"
 }
-
-android {
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-}
-
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
-    compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
-}
-
-dependencies {
-    testImplementation("junit:junit:4.13.2")
-}

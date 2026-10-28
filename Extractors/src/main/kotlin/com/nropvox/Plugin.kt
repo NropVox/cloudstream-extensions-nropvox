@@ -13,7 +13,6 @@ class ExtractorPlugin : Plugin() {
 
     override fun load(context: Context) {
         val sharedPref = context.getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE)
-        registerExtractorAPI(LuluVid())
         registerExtractorAPI(Vidara())
         registerExtractorAPI(RubyVidHub())
         registerExtractorAPI(SubtitleCat())
@@ -60,6 +59,9 @@ class ExtractorPlugin : Plugin() {
         registerExtractorAPI(HLSProxy(sharedPref))
         registerExtractorAPI(Emturbovid())
         registerExtractorAPI(AsnWish())
+        registerExtractorAPI(JavtifulPage())
+        registerExtractorAPI(SexTBPage())
+        registerExtractorAPI(MissAVPage())
 
         openSettings = { ctx ->
             val activity = ctx as AppCompatActivity

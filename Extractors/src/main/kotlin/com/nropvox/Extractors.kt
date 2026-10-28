@@ -33,8 +33,6 @@ private val m3u8OrMasterRegex = Regex("""[:=]\s*"([^"\s]+(\.m3u8|master\.txt)[^"
 
 private fun String.fileCode(): String = substringBefore('?').trimEnd('/').substringAfterLast('/')
 
-private fun String.unpack(): String = getAndUnpack(this)
-
 private suspend fun ExtractorApi.emitPackedM3u8(
     source: String,
     text: String,
@@ -42,7 +40,7 @@ private suspend fun ExtractorApi.emitPackedM3u8(
     keep: (String) -> Boolean,
     callback: (ExtractorLink) -> Unit,
 ) {
-    m3u8OrMasterRegex.findAll(text.unpack()).map { match ->
+    m3u8OrMasterRegex.findAll(getAndUnpack(text)).map { match ->
         URI(referer).resolve(match.groupValues[1]).toString()
     }.distinct().forEach { streamUrl ->
         if (!keep(streamUrl)) return@forEach
@@ -54,11 +52,6 @@ private suspend fun ExtractorApi.emitPackedM3u8(
             Log.e(source, "Playlist request failed: ${e.message}")
         }
     }
-}
-
-class LuluVid : StreamWishExtractor() {
-    override val name = "LuluStream"
-    override val mainUrl = "https://luluvid.com"
 }
 
 class Vidara : ExtractorApi() {
@@ -101,18 +94,13 @@ class RubyVidHub : ExtractorApi() {
         val id = url.fileCode()
         if (id.isBlank()) return
 
-        val text = app.post(
-            "$mainUrl/dl",
-            data = mapOf("file_code" to id, "op" to "embed")
-        ).text
-
-        m3u8OrMasterRegex.findAll(text.unpack()).forEach { match ->
-            generateM3u8(
-                source = name,
-                streamUrl = match.groupValues[1],
-                referer = mainUrl
-            ).forEach(callback)
-        }
+        emitPackedM3u8(
+            source = name,
+            text = app.post("$mainUrl/dl", data = mapOf("file_code" to id, "op" to "embed")).text,
+            referer = mainUrl,
+            keep = { true },
+            callback = callback,
+        )
     }
 }
 
@@ -333,7 +321,8 @@ class MyCloudZ : VidHidePro() {
     override var name = "MyCloudZ"
 }
 
-class Turboplayers : ExtractorApi() {
+/** Players that name their stream in `var urlPlay = '…';`. */
+open class Turboplayers : ExtractorApi() {
     override val mainUrl = "https://turboplayers.xyz"
     override val name = "TurboPlayer"
     override val requiresReferer = false
@@ -408,29 +397,9 @@ class Javclan : ExtractorApi() {
     }
 }
 
-class Javggvideo : ExtractorApi() {
+class Javggvideo : Turboplayers() {
     override val name = "Javgg Video"
     override val mainUrl = "https://javggvideo.xyz"
-    override val requiresReferer = false
-
-    override suspend fun getUrl(
-        url: String, referer: String?,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        val response = app.get(url).text
-        val link = response.substringAfter("var urlPlay = '").substringBefore("';")
-        if (link.contains("m3u8")) {
-            generateM3u8(name, link, mainUrl).forEach(callback)
-        } else {
-            callback(
-                newExtractorLink(name, name, link, INFER_TYPE) {
-                    this.quality = Qualities.Unknown.value
-                }
-            )
-        }
-
-    }
 }
 
 class Swhoi : Filesim() {

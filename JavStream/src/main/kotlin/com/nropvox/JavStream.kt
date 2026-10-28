@@ -21,17 +21,13 @@ import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newSearchResponseList
+import com.lagradost.cloudstream3.runAllAsync
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.getExtractorApiFromName
+import com.lagradost.cloudstream3.utils.loadExtractor
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
+import java.util.Collections
 
 class JavStream : MainAPI() {
     override var mainUrl = "https://sextb.net"
@@ -174,55 +170,20 @@ class JavStream : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         Log.d("JavStream", data)
-        val tasks = mutableListOf<suspend () -> Unit>()
+        // The page extractors look the code up on SubtitleCat too, so the same file can arrive more than once.
+        val subtitles = Collections.synchronizedSet(HashSet<String>())
+        val subtitle: (SubtitleFile) -> Unit = { if (subtitles.add(it.url)) subtitleCallback(it) }
+        var found = false
+        val link: (ExtractorLink) -> Unit = { found = true; callback(it) }
 
-        // Subtitle
-        tasks.add(
-            suspend {
-                getExtractorApiFromName("SubtitleCat").takeIf { it.name == "SubtitleCat" }?.getUrl(
-                    url = data,
-                    subtitleCallback = subtitleCallback,
-                    callback = callback
-                )
-            }
+        runAllAsync(
+            { loadExtractor("https://subtitlecat.com/?query=$data", subtitle, link) },
+            { JavStreamSources.javtiful(data)?.let { loadExtractor(it, subtitle, link) } },
+            { JavStreamSources.sextb(data)?.let { loadExtractor(it, "$mainUrl/", subtitle, link) } },
+            { JavStreamSources.missav(data)?.let { loadExtractor(it, subtitle, link) } },
+            { JavStreamSources.javgg(data, subtitle, link) },
+            { JavStreamSources.supjav(data, subtitle, link) },
         )
-
-        javExtractors.forEach { extractor ->
-            tasks.add(
-                suspend {
-                    extractor.getUrl(
-                        data,
-                        subtitleCallback = subtitleCallback,
-                        callback = callback
-                    )
-                }
-            )
-        }
-
-        runLimitedAsync(20, tasks = tasks.toTypedArray())
-
-        return true
-    }
-
-    private suspend fun runLimitedAsync(
-        concurrency: Int = 10, vararg tasks: suspend () -> Unit
-    ) = coroutineScope {
-        if (tasks.isEmpty()) return@coroutineScope
-
-        val semaphore = Semaphore(concurrency)
-
-        tasks.map { task ->
-            async(Dispatchers.IO) {
-                semaphore.withPermit {
-                    try {
-                        task()
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        com.lagradost.api.Log.e("JavStream", "Task failed: ${e.message}")
-                    }
-                }
-            }
-        }.awaitAll()
+        return found
     }
 }

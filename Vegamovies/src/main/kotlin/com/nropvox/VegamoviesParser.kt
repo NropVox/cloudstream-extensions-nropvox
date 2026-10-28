@@ -12,9 +12,6 @@ import org.jsoup.nodes.Element
 object VegamoviesParser {
     enum class Kind { GDIRECT, VCLOUD, EPISODES, BATCH, OTHER }
 
-    /** File host of a nexdrive link, read from its URL: the alternative sources are bare links with no label. */
-    enum class Host { GDIRECT, VCLOUD, HUBCLOUD, VDRIVE, PIXELDRAIN, OTHER }
-
     private val mapper = ObjectMapper()
 
     private val leadingNoise = Regex("""^\s*Download\s+""", RegexOption.IGNORE_CASE)
@@ -40,11 +37,6 @@ object VegamoviesParser {
     )
     private val size = Regex("""\[[^\]]*\d\s*(?:MB|GB)[^\]]*\]""", RegexOption.IGNORE_CASE)
     private val imdb = Regex("""imdb\.com/title/(tt\d+)""")
-    private val reurl = Regex("""var reurl = "([^"]+)"""")
-    private val doubleBase64 = Regex("""atob\(atob\('([^']+)'\)\)""")
-    private val hubcloudUrl = Regex("""var url = '([^']+)'""")
-    private val vdriveShare = Regex("""/s/([A-Za-z0-9]+)""")
-    private val pixeldrainFile = Regex("""/(?:u|api/file)/([A-Za-z0-9]+)""")
 
     fun cleanTitle(raw: String): String {
         var title = raw.replace(leadingNoise, "").replace(leadingFlag, "")
@@ -79,18 +71,6 @@ object VegamoviesParser {
         label.contains("v-cloud", true) -> Kind.VCLOUD
         label.contains("episode", true) -> Kind.EPISODES
         else -> Kind.OTHER
-    }
-
-    fun host(url: String): Host {
-        val host = url.substringAfter("://").substringBefore('/').lowercase()
-        return when {
-            host.startsWith("fastdl.") -> Host.GDIRECT
-            host.startsWith("vcloud.") -> Host.VCLOUD
-            host.startsWith("hubcloud.") -> Host.HUBCLOUD
-            "vegadrive." in host -> Host.VDRIVE
-            host.startsWith("pixeldrain.") -> Host.PIXELDRAIN
-            else -> Host.OTHER
-        }
     }
 
     private fun Element.cleanText() = text().replace("⚡", "").replace(Regex("""\s+"""), " ").trim()
@@ -184,33 +164,5 @@ object VegamoviesParser {
 
     fun isAnime(doc: Document): Boolean = doc.select(".post-categories a").any {
         it.attr("href").contains("anime-series") || it.text().equals("Anime Series", true)
-    }
-
-    /** G-Direct: the embed page names the direct file in `var reurl`, behind a `dl.php?link=` ad wrapper. */
-    fun directUrl(embedHtml: String): String? = reurl.find(embedHtml)?.groupValues?.get(1)?.let {
-        if ("dl.php?link=" in it) it.substringAfter("dl.php?link=") else it
-    }
-
-    /** V-Cloud landing page: the download button's target hides in `atob(atob('…'))`. */
-    fun vcloudNext(landingHtml: String, decode: (String) -> String): String? =
-        doubleBase64.find(landingHtml)?.groupValues?.get(1)?.let { decode(decode(it)) }
-
-    /** HubCloud drive page: the `#download` button (also in `var url`) opens the same server list as V-Cloud. */
-    fun hubcloudNext(doc: Document): String? =
-        doc.selectFirst("a#download")?.attr("href")?.takeIf { it.startsWith("http") }
-            ?: hubcloudUrl.find(doc.html())?.groupValues?.get(1)
-
-    /** V-Drive share id of `https://one.vegadrive.app/s/<id>`. */
-    fun vdriveId(url: String): String? = vdriveShare.find(url)?.groupValues?.get(1)
-
-    /** Pixeldrain file id of `/u/<id>` or `/api/file/<id>`. */
-    fun pixeldrainId(url: String): String? = pixeldrainFile.find(url)?.groupValues?.get(1)
-
-    /** V-Cloud and HubCloud result page: server name (`FSLv2 Server`) to link. `Server : 1` has an empty href and is skipped. */
-    fun mirrors(doc: Document): List<Pair<String, String>> = doc.select("a[href]").mapNotNull { a ->
-        val text = a.cleanText()
-        val href = a.attr("href")
-        if (!text.startsWith("Download [") || !href.startsWith("http")) return@mapNotNull null
-        text.substringAfter('[').substringBefore(']').trim() to href
     }
 }

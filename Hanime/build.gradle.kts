@@ -16,15 +16,3 @@ cloudstream {
     tvTypes = listOf("NSFW")
     iconUrl = "https://www.google.com/s2/favicons?domain=hanime.tv&sz=%size%"
 }
-
-// Cloudstream's inline JSON APIs use Java 11 bytecode.
-android {
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-}
-
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
-    compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
-}

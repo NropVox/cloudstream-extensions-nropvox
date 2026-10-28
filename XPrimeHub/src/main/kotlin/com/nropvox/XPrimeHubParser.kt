@@ -11,8 +11,6 @@ import org.jsoup.parser.Parser
  * links to. Nothing here touches the network or the Cloudstream library.
  */
 object XPrimeHubParser {
-    /** File host of a nexdrive link, read from its URL. */
-    enum class Host { GDIRECT, VCLOUD, HUBCLOUD, VDRIVE, PIXELDRAIN, OTHER }
 
     private val leadingNoise = Regex("""^\s*(?:Download\s+)?(?:\[18\+\]\s*)?""", RegexOption.IGNORE_CASE)
     private val yearInParens = Regex("""\((\d{4})\)""")
@@ -31,11 +29,6 @@ object XPrimeHubParser {
     private val episodeHeading = Regex("""\{\s*Episodes?\s*(\d+)""", RegexOption.IGNORE_CASE)
     private val height = Regex("""(\d{3,4})p""", RegexOption.IGNORE_CASE)
     private val size = Regex("""\[\s*[\d.]+\s*[MG]B\s*\]""", RegexOption.IGNORE_CASE)
-    private val reurl = Regex("""var reurl = "([^"]+)"""")
-    private val doubleBase64 = Regex("""atob\(atob\('([^']+)'\)\)""")
-    private val hubcloudUrl = Regex("""var url = '([^']+)'""")
-    private val vdriveShare = Regex("""/s/([A-Za-z0-9]+)""")
-    private val pixeldrainFile = Regex("""/(?:u|api/file)/([A-Za-z0-9]+)""")
     private val whitespace = Regex("""\s+""")
 
     fun unescape(html: String): String = Parser.unescapeEntities(html, false)
@@ -64,18 +57,6 @@ object XPrimeHubParser {
         ?: if (text.contains("4K", ignoreCase = true)) 2160 else 0
 
     fun size(text: String): String? = size.find(text)?.value?.replace(" ", "")
-
-    fun host(url: String): Host {
-        val host = url.substringAfter("://").substringBefore('/').lowercase()
-        return when {
-            host.startsWith("fastdl.") -> Host.GDIRECT
-            host.startsWith("vcloud.") -> Host.VCLOUD
-            host.startsWith("hubcloud.") -> Host.HUBCLOUD
-            "vegadrive." in host -> Host.VDRIVE
-            host.startsWith("pixeldrain.") -> Host.PIXELDRAIN
-            else -> Host.OTHER
-        }
-    }
 
     private fun Element.cleanText() = text().replace("⚡", "").replace(whitespace, " ").trim()
 
@@ -110,7 +91,7 @@ object XPrimeHubParser {
     /** Host links of a nexdrive page (G-Direct, V-Cloud, V-Drive, Filepress, ...). */
     fun hostLinks(doc: Document): List<String> = (doc.selectFirst(".entry-inner") ?: doc).select("a[href]")
         .map { it.attr("abs:href").ifBlank { it.attr("href") } }
-        .filter { it.startsWith("http") && host(it) != Host.OTHER }
+        .filter { it.startsWith("http") && NexdriveParser.host(it) != NexdriveParser.Host.OTHER }
         .distinct()
 
     /** A `Cast` / `Genre` / `Language` detail from the info table (new posts) or the `<strong>Cast:</strong> …<br>` list (old). */
@@ -141,32 +122,4 @@ object XPrimeHubParser {
     fun screenshot(doc: Document, siteHost: String): String? = doc.select("img[src]")
         .map { it.attr("abs:src") }
         .firstOrNull { it.startsWith("http") && siteHost !in it }
-
-    /** G-Direct: the embed page names the direct file in `var reurl`, behind a `dl.php?link=` ad wrapper. */
-    fun directUrl(embedHtml: String): String? = reurl.find(embedHtml)?.groupValues?.get(1)?.let {
-        if ("dl.php?link=" in it) it.substringAfter("dl.php?link=") else it
-    }
-
-    /** V-Cloud landing page: the download button's target hides in `atob(atob('…'))`. */
-    fun vcloudNext(landingHtml: String, decode: (String) -> String): String? =
-        doubleBase64.find(landingHtml)?.groupValues?.get(1)?.let { decode(decode(it)) }
-
-    /** HubCloud drive page: the `#download` button (also in `var url`) opens the same server list as V-Cloud. */
-    fun hubcloudNext(doc: Document): String? =
-        doc.selectFirst("a#download")?.attr("href")?.takeIf { it.startsWith("http") }
-            ?: hubcloudUrl.find(doc.html())?.groupValues?.get(1)
-
-    /** V-Drive share id of `https://one.vegadrive.app/s/<id>`. */
-    fun vdriveId(url: String): String? = vdriveShare.find(url)?.groupValues?.get(1)
-
-    /** Pixeldrain file id of `/u/<id>` or `/api/file/<id>`. */
-    fun pixeldrainId(url: String): String? = pixeldrainFile.find(url)?.groupValues?.get(1)
-
-    /** V-Cloud and HubCloud result page: server name (`FSL Server`) to link. Links with an empty href are skipped. */
-    fun mirrors(doc: Document): List<Pair<String, String>> = doc.select("a[href]").mapNotNull { a ->
-        val text = a.cleanText()
-        val href = a.attr("href")
-        if (!text.startsWith("Download [") || !href.startsWith("http")) return@mapNotNull null
-        text.substringAfter('[').substringBefore(']').trim() to href
-    }
 }

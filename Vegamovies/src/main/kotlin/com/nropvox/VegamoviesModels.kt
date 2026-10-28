@@ -22,24 +22,6 @@ data class VgDocument(
     val category: List<String>? = null,
 )
 
-/** V-Drive `GET /api/file/<id>`: which mirror providers hold the file (`ready`, `pending`, `failed`). */
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class VdFile(val providers: List<VdProvider>? = null)
-
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class VdProvider(val provider: String? = null, val status: String? = null)
-
-/** V-Drive `GET /download-link/<id>/skydrop`: `{"ready":false,"retry_after_ms":2500}` until the bridge has the file. */
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class VdLink(
-    @JsonProperty("download_url") val url: String? = null,
-    @JsonProperty("retry_after_ms") val retryAfterMs: Long? = null,
-)
-
-/** Pixeldrain `GET /api/file/<id>/info`; taken-down files answer 451 on download. */
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class PdInfo(@JsonProperty("can_download") val canDownload: Boolean? = null)
-
 /** One grid card (home and category pages). */
 data class VgCard(val url: String, val title: String, val poster: String?, val tag: String?, val rating: Double?)
 

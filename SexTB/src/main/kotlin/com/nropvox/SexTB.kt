@@ -1,7 +1,6 @@
 package com.nropvox
 
 import android.util.Log
-import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.Actor
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
@@ -14,10 +13,7 @@ import com.lagradost.cloudstream3.SearchResponseList
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.app
-import com.lagradost.cloudstream3.base64Decode
-import com.lagradost.cloudstream3.base64Encode
 import com.lagradost.cloudstream3.network.CloudflareKiller
-import org.jsoup.Jsoup
 import com.lagradost.cloudstream3.fixUrl
 import com.lagradost.cloudstream3.fixUrlNull
 import com.lagradost.cloudstream3.mainPageOf
@@ -26,15 +22,7 @@ import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newSearchResponseList
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.getExtractorApiFromName
 import com.lagradost.cloudstream3.utils.loadExtractor
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import org.jsoup.nodes.Element
 
 class SexTB : MainAPI() {
@@ -171,124 +159,15 @@ class SexTB : MainAPI() {
         }
     }
 
+    // Resolved by the Extractors plugin's SexTBPage, which JavStream shares.
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        Log.d(name, data)
-        val res = app.get(data, headers = commonHeaders, interceptor = cloudflareInterceptor)
-
-        val tasks = mutableListOf<suspend () -> Unit>()
-
-        tasks.add(
-            suspend {
-                res.document.select(".film-info-title a").attr("href")
-                    .substringAfterLast("/")
-                    .let { code ->
-                        getExtractorApiFromName("SubtitleCat").takeIf { it.name == "SubtitleCat" }
-                            ?.getUrl(
-                                url = code,
-                                subtitleCallback = subtitleCallback,
-                                callback = callback
-                            )
-                    }
-            }
-        )
-
-        val filmId = Regex("""var filmId\s*=\s*(\d+)""").find(res.text)?.groupValues?.get(1)
-        var currentPt = Regex("""__pt\s*=\s*['"](.*?)['"]""").find(res.text)?.groupValues?.get(1)
-        var currentPk = Regex("""__pk\s*=\s*['"](.*?)['"]""").find(res.text)?.groupValues?.get(1)
-        val token = res.document.selectFirst("meta[name=_token]")?.attr("value")
-        val socket = res.document.selectFirst("meta[name=_socket]")?.attr("value")
-        var foundPlayer = false
-        val playerUrls = mutableSetOf<String>()
-        fixUrlNull(res.document.selectFirst("#sextb-player iframe[src]")?.attr("src"))
-            ?.takeIf { !it.contains("upgrade") }?.let { iframeUrl ->
-                foundPlayer = true
-                playerUrls.add(iframeUrl)
-                tasks.add(suspend { loadExtractor(iframeUrl, data, subtitleCallback, callback) })
-            }
-
-        if (filmId != null && currentPt != null && currentPk != null && token != null && socket != null) {
-            // The site rotates the session player token and XOR key after every request.
-            for (ep in res.document.select(".episode-list button.btn-player:not(.vip)")) {
-                try {
-                    val response = app.post(
-                        "$mainUrl/ajax/player",
-                        headers = commonHeaders + mapOf(
-                            "Referer" to data,
-                            "X-Requested-With" to "XMLHttpRequest",
-                            "Authorization" to "Basic ${base64Encode("$token:$socket".toByteArray(Charsets.UTF_8))}",
-                            "Origin" to mainUrl
-                        ),
-                        data = mapOf(
-                            "episode" to ep.attr("data-id"),
-                            "filmId" to ep.attr("data-source").ifEmpty { filmId },
-                            "pt" to currentPt.orEmpty()
-                        )
-                    ).parsedSafe<PlayerResponse>() ?: continue
-                    val decryptionKey = currentPk.orEmpty()
-                    currentPt = response.nextPt ?: currentPt
-                    currentPk = response.nextPk ?: currentPk
-                    val encrypted = response.playerEnc ?: continue
-                    val player = Jsoup.parse(decryptPlayer(encrypted, decryptionKey))
-                    val iframeUrl = fixUrlNull(player.selectFirst("iframe[src]")?.attr("src"))
-                        ?: continue
-                    if (iframeUrl.contains("upgrade") || !playerUrls.add(iframeUrl)) continue
-                    foundPlayer = true
-                    tasks.add(suspend { loadExtractor(iframeUrl, data, subtitleCallback, callback) })
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.d(name, "${e.message}")
-                }
-            }
-        }
-
-        runLimitedAsync(tasks = tasks.toTypedArray())
-
-        return foundPlayer
+        var found = false
+        loadExtractor(data, "$mainUrl/", subtitleCallback) { found = true; callback(it) }
+        return found
     }
-
-    private fun decryptPlayer(encoded: String, key: String): String {
-        return try {
-            val decoded = base64Decode(encoded)
-            val result = StringBuilder()
-            for (i in decoded.indices) {
-                result.append((decoded[i].code xor key[i % key.length].code).toChar())
-            }
-            result.toString()
-        } catch (e: Exception) {
-            Log.d(name, "${e.message}")
-            ""
-        }
-    }
-
-    private suspend fun runLimitedAsync(
-        concurrency: Int = 10, vararg tasks: suspend () -> Unit
-    ) = coroutineScope {
-        if (tasks.isEmpty()) return@coroutineScope
-
-        val semaphore = Semaphore(concurrency)
-
-        tasks.map { task ->
-            async(Dispatchers.IO) {
-                semaphore.withPermit {
-                    try {
-                        task()
-                    } catch (e: Exception) {
-                        Log.e(name, "Task failed: ${e.message}")
-                    }
-                }
-            }
-        }.awaitAll()
-    }
-
-    data class PlayerResponse(
-        @JsonProperty("player_enc") val playerEnc: String? = null,
-        @JsonProperty("next_pt") val nextPt: String? = null,
-        @JsonProperty("next_pk") val nextPk: String? = null
-    )
 }

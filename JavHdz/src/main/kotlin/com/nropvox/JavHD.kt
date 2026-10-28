@@ -20,21 +20,16 @@ import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newSearchResponseList
+import com.lagradost.cloudstream3.runAllAsync
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.M3u8Helper.Companion.generateM3u8
-import com.lagradost.cloudstream3.utils.getExtractorApiFromName
 import com.lagradost.cloudstream3.utils.loadExtractor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
@@ -112,7 +107,7 @@ class JavHD(
             }
         }
 
-        runLimitedAsync(tasks = tasks.toTypedArray())
+        runAllAsync(*tasks.toTypedArray())
 
         return items.mapIndexed { index, item ->
             newMovieSearchResponse(translatedTitles[index], item.href, TvType.NSFW) {
@@ -201,14 +196,9 @@ class JavHD(
 
         val tasks = mutableListOf<suspend () -> Unit>()
 
-        tasks.add(suspend suspend@{
-            val code = dataObject.code ?: return@suspend
-            getExtractorApiFromName("SubtitleCat").takeIf { it.name == "SubtitleCat" }?.getUrl(
-                url = code,
-                subtitleCallback = subtitleCallback,
-                callback = callback
-            )
-        })
+        dataObject.code?.let { code ->
+            tasks.add { loadExtractor("https://subtitlecat.com/?query=$code", subtitleCallback, callback) }
+        }
 
         dataObject.data.forEach { (id, serverId) ->
             tasks.add(suspend suspend@{
@@ -259,32 +249,9 @@ class JavHD(
             })
         }
 
-        runLimitedAsync(tasks = tasks.toTypedArray())
+        runAllAsync(*tasks.toTypedArray())
 
         return true
-    }
-
-    private suspend fun runLimitedAsync(
-        concurrency: Int = 50,
-        vararg tasks: suspend () -> Unit
-    ) = coroutineScope {
-        if (tasks.isEmpty()) return@coroutineScope
-
-        val semaphore = Semaphore(concurrency)
-
-        tasks.map { task ->
-            async(Dispatchers.IO) {
-                semaphore.withPermit {
-                    try {
-                        task()
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        Log.e("JavHD", "Task failed: ${e.message}")
-                    }
-                }
-            }
-        }.awaitAll()
     }
 
     data class GoogleTranslateResponse(

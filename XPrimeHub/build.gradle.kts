@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     authors = listOf("NropVox")
@@ -9,17 +9,5 @@ cloudstream {
     iconUrl = "https://www.google.com/s2/favicons?domain=xprimehub.pics&sz=%size%"
 }
 
-android {
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-}
-
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
-    compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
-}
-
-dependencies {
-    testImplementation("junit:junit:4.13.2")
-}
+// The nexdrive host resolvers are shared with Vegamovies.
+android.sourceSets.getByName("main").kotlin.srcDir("../shared/nexdrive")

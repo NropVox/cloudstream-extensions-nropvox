@@ -19,9 +19,7 @@ import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newSearchResponseList
 import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.M3u8Helper.Companion.generateM3u8
-import com.lagradost.cloudstream3.utils.getAndUnpack
-import com.lagradost.cloudstream3.utils.getExtractorApiFromName
+import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Element
 
 class MissAV : MainAPI() {
@@ -31,10 +29,8 @@ class MissAV : MainAPI() {
         const val MAIN_PAGE_CARD_SELECTOR = "$VIDEO_CARD_SELECTOR, div.thumbnail.group"
         const val VIDEO_LINK_SELECTOR = "a[href*='/en/'], a[href*='/dm']"
         const val TITLE_SELECTOR = "div.my-2 a, div.title a, a.text-secondary"
-        const val SUBTITLE_EXTRACTOR = "SubtitleCat"
         val ignoredTitles = setOf("Recent update", "Contact", "Support", "DMCA", "Home")
         val uncensoredPattern = Regex("uncensored[-_ ]?leak", RegexOption.IGNORE_CASE)
-        val playlistIdPattern = Regex("/([a-f0-9\\-]{36})/")
     }
 
     override var mainUrl = "https://missav.live"
@@ -147,32 +143,15 @@ class MissAV : MainAPI() {
         }
     }
 
+    // Resolved by the Extractors plugin's MissAVPage, which JavStream shares. [data] is `code:url`.
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val videoCode = data.substringBefore(":")
-        val videoUrl = data.substringAfter(":")
-        val packedScript = app.get(videoUrl, interceptor = cloudflareInterceptor).text
-        val playlistId = playlistIdPattern.find(getAndUnpack(packedScript))?.groupValues?.get(1)
-            ?: return false
-
-        getExtractorApiFromName(SUBTITLE_EXTRACTOR).takeIf { it.name == SUBTITLE_EXTRACTOR }
-            ?.getUrl(
-                url = videoCode,
-                subtitleCallback = subtitleCallback,
-                callback = callback
-            )
-
-        generateM3u8(
-            source = name,
-            streamUrl = "https://surrit.com/$playlistId/playlist.m3u8",
-            referer = mainUrl,
-            headers = mapOf("Referer" to mainUrl)
-        ).forEach(callback)
-
-        return true
+        var found = false
+        loadExtractor(data.substringAfter(":"), subtitleCallback) { found = true; callback(it) }
+        return found
     }
 }

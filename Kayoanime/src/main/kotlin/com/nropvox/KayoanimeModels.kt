@@ -27,3 +27,14 @@ data class KaNode(
     val type: String? = null,
     val children: List<KaNode>? = null,
 )
+
+/** `POST <index folder url>` on a Google Drive Index worker: one page of a folder, 100 entries at most. */
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KaIndexPage(val nextPageToken: String? = null, val data: KaIndexData? = null)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KaIndexData(val files: List<KaIndexFile>? = null)
+
+/** An index entry; folders have the Drive folder [mimeType]. Its `id` is encrypted and not a Drive id. */
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class KaIndexFile(val name: String? = null, val mimeType: String? = null)

@@ -1,10 +1,11 @@
-version = 1
+version = 2
 
 cloudstream {
     authors = listOf("NropVox")
     language = "en"
     description = "Anime from kayoanime.com: HEVC 1080p Dual Audio / Eng Sub releases hosted on Google Drive. " +
-        "Files are played through your own Google Drive proxy (Cloudflare Worker); set its API key in the plugin settings. " +
+        "Drive files are played through your own Google Drive proxy (Cloudflare Worker); set its API key in the plugin settings. " +
+        "Posts hosted on the site's Drive index mirrors play without it. " +
         "Posts whose Drive folders are dead or only hold archives show no episodes."
     status = 1
     tvTypes = listOf("Anime", "AnimeMovie")

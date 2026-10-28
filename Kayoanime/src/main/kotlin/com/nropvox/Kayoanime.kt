@@ -11,9 +11,11 @@ import com.lagradost.cloudstream3.MainAPI
 import com.lagradost.cloudstream3.MainPageRequest
 import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SearchResponseList
+import com.lagradost.cloudstream3.SeasonData
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.addEpisodes
+import com.lagradost.cloudstream3.addSeasonNames
 import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
@@ -23,23 +25,29 @@ import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newSearchResponseList
+import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.nropvox.KayoanimeParser.DriveFile
-import com.nropvox.KayoanimeParser.DriveRef
+import com.nropvox.KayoanimeParser.Kind
+import com.nropvox.KayoanimeParser.Ref
+import com.nropvox.KayoanimeParser.SourceFile
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * kayoanime.com is a WordPress blog: the catalog, search and post bodies come from the stock REST API, and a post is
- * a whole series whose Drive buttons are the only episode source. Drive is read through the user's own proxy Worker
- * (`/resolve` lists a folder, `/dl/<id>` streams a file with Range support), which is also what makes the private
- * Google-Group folders readable. The proxy URL and API key are plugin settings, so no secret ships in the build.
+ * a whole series whose buttons are the only episode source. Most buttons are Drive folders or files, read through the
+ * user's own proxy Worker (`/resolve` lists a folder, `/dl/<id>` streams a file with Range support), which is also
+ * what makes the private Google-Group folders readable. The proxy URL and API key are plugin settings, so no secret
+ * ships in the build. Some buttons are tinyurl links to Drive or to the site's own "Google Drive Index" workers, which
+ * list folders by POST and stream files by path without any key.
  */
 class Kayoanime(private val sharedPref: SharedPreferences? = null) : MainAPI() {
     override var mainUrl = "https://kayoanime.com"
@@ -67,6 +75,7 @@ class Kayoanime(private val sharedPref: SharedPreferences? = null) : MainAPI() {
 
     private val posters = ConcurrentHashMap<Int, String>()
     private val proxyLimit = Semaphore(PROXY_PARALLEL)
+    private val indexLimit = Semaphore(PROXY_PARALLEL)
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val category = if (request.data.isEmpty()) "" else "&categories=${request.data}"
@@ -115,17 +124,26 @@ class Kayoanime(private val sharedPref: SharedPreferences? = null) : MainAPI() {
     private fun postUrl(id: Int) = "$mainUrl/?p=$id"
 
     override suspend fun load(url: String): LoadResponse {
-        if (proxyKey.isEmpty()) throw ErrorLoadingException(NO_KEY_MESSAGE)
         val post = loadPost(url) ?: throw ErrorLoadingException("Could not load $url")
         val id = post.id ?: throw ErrorLoadingException("Could not load $url")
         val html = post.content?.rendered.orEmpty()
         val title = KayoanimeParser.cleanTitle(post.title?.rendered.orEmpty())
 
-        val refs = KayoanimeParser.driveRefs(html)
+        val refs = KayoanimeParser.refs(html).amap { if (it.kind == Kind.SHORT) unshorten(it) else it }.filterNotNull()
+            .distinctBy { it.target }
         if (refs.isEmpty()) throw ErrorLoadingException("$title has no Google Drive links (Vimeo/Mega only)")
-        val files = refs.amap { listFiles(it) }.flatten().distinctBy { it.id }
-        val entries = KayoanimeParser.entries(files)
+        val hasDrive = refs.any { it.kind == Kind.DRIVE }
+        if (hasDrive && proxyKey.isEmpty() && refs.none { it.kind == Kind.INDEX }) throw ErrorLoadingException(NO_KEY_MESSAGE)
+        val files = refs.amap { ref ->
+            when (ref.kind) {
+                Kind.DRIVE -> if (proxyKey.isEmpty()) emptyList() else listFiles(ref)
+                Kind.INDEX -> listIndex(ref, ref.target)
+                Kind.SHORT -> emptyList()
+            }
+        }.flatten().let(KayoanimeParser::distinctFiles)
+        val (entries, seasonNames) = KayoanimeParser.entries(files, KayoanimeParser.aliases(post.title?.rendered.orEmpty()))
         if (entries.isEmpty()) {
+            if (hasDrive && proxyKey.isEmpty()) throw ErrorLoadingException(NO_KEY_MESSAGE)
             throw ErrorLoadingException("No playable files for $title: its Drive folders are missing, empty or only hold archives")
         }
         val details = KayoanimeParser.details(html)
@@ -154,6 +172,7 @@ class Kayoanime(private val sharedPref: SharedPreferences? = null) : MainAPI() {
         return newAnimeLoadResponse(title, pageUrl, TvType.Anime) {
             fill()
             addEpisodes(DubStatus.None, episodes)
+            if (seasonNames.isNotEmpty()) addSeasonNames(seasonNames.map { (season, name) -> SeasonData(season, name) })
         }
     }
 
@@ -164,23 +183,67 @@ class Kayoanime(private val sharedPref: SharedPreferences? = null) : MainAPI() {
         return tryParseJson<List<KaPost>>(app.get("$api/posts?slug=${encode(slug)}&$fields").text)?.firstOrNull()
     }
 
+    /** Where a tinyurl button leads, if that is Drive or an index; Google Groups, Mega and dead links give null. */
+    private suspend fun unshorten(ref: Ref): Ref? {
+        val target = shortLinks[ref.target] ?: runCatching {
+            app.get(ref.target, allowRedirects = false, timeout = 20).headers["location"].orEmpty()
+        }.onFailure { Log.w(name, "Short link ${ref.target}: $it") }.getOrNull()?.also { shortLinks[ref.target] = it }
+        return target?.let { KayoanimeParser.classify(it, ref.label, ref.group) }?.takeIf { it.kind != Kind.SHORT }
+    }
+
     // ---- Drive through the proxy ---------------------------------------------------------------------------
 
     /** Every file under a button, subfolders included. A dead or private-and-unshared folder yields nothing. */
-    private suspend fun listFiles(ref: DriveRef, depth: Int = 0, parents: List<String> = emptyList()): List<DriveFile> {
-        val node = resolve(ref.id) ?: return emptyList()
-        if (node.type != "folder") return listOf(DriveFile(ref.id, node.name.orEmpty(), ref.label, parents))
+    private suspend fun listFiles(ref: Ref, driveId: String = ref.target, depth: Int = 0, parents: List<String> = emptyList()): List<SourceFile> {
+        val node = resolve(driveId) ?: return emptyList()
+        if (node.type != "folder") return listOf(SourceFile(driveId, node.name.orEmpty(), ref.label, parents, ref.group))
         // Folder names often hold the season the file names leave out, so files remember them (nearest first).
         val folders = listOfNotNull(node.name) + parents
         val children = node.children.orEmpty()
         val files = children.filter { it.type != "folder" }.mapNotNull { child ->
-            DriveFile(child.id ?: return@mapNotNull null, child.name.orEmpty(), ref.label, folders)
+            SourceFile(child.id ?: return@mapNotNull null, child.name.orEmpty(), ref.label, folders, ref.group)
         }
         if (depth >= MAX_FOLDER_DEPTH) return files
         // One request per folder: the proxy's own `recursive=1` can exceed a Worker's subrequest limit.
         val nested = children.filter { it.type == "folder" && it.id != null }
-            .amap { listFiles(DriveRef(it.id!!, true, ref.label), depth + 1, folders) }.flatten()
+            .amap { listFiles(ref, it.id!!, depth + 1, folders) }.flatten()
         return files + nested
+    }
+
+    // ---- Google Drive Index workers ------------------------------------------------------------------------
+
+    /** Every file under an index folder URL (or the file a URL names), like [listFiles]. Dead workers yield nothing. */
+    private suspend fun listIndex(ref: Ref, url: String, depth: Int = 0, parents: List<String> = emptyList()): List<SourceFile> {
+        if (!url.endsWith("/")) return listOf(SourceFile(url, KayoanimeParser.indexName(url), ref.label, parents, ref.group))
+        val folders = listOfNotNull(KayoanimeParser.indexName(url).ifEmpty { null }) + parents
+        val children = indexFolder(url)
+        val files = children.filter { it.mimeType != INDEX_FOLDER && it.name != null }.map {
+            SourceFile(KayoanimeParser.indexChild(url, it.name!!, false), it.name, ref.label, folders, ref.group)
+        }
+        if (depth >= MAX_FOLDER_DEPTH) return files
+        val nested = children.filter { it.mimeType == INDEX_FOLDER && it.name != null }
+            .amap { listIndex(ref, KayoanimeParser.indexChild(url, it.name!!, true), depth + 1, folders) }.flatten()
+        return files + nested
+    }
+
+    /** One folder of an index, all pages (100 entries each). */
+    private suspend fun indexFolder(url: String): List<KaIndexFile> = indexLimit.withPermit {
+        val files = mutableListOf<KaIndexFile>()
+        var token: String? = null
+        for (page in 0 until MAX_INDEX_PAGES) {
+            val body = mapOf("id" to "", "type" to "folder", "password" to "", "page_token" to token, "page_index" to page)
+                .toJson().toRequestBody("application/json".toMediaType())
+            val res = runCatching { app.post(url, requestBody = body, timeout = 30) }
+                .onFailure { Log.w(name, "Index $url: $it") }.getOrNull()
+            val listing = res?.takeIf { it.code == 200 }?.let { tryParseJson<KaIndexPage>(it.text) }
+            if (listing == null) {
+                Log.w(name, "Index $url: HTTP ${res?.code}")
+                break
+            }
+            files += listing.data?.files.orEmpty()
+            token = listing.nextPageToken?.ifEmpty { null } ?: break
+        }
+        files
     }
 
     private suspend fun resolve(driveId: String): KaNode? = proxyLimit.withPermit {
@@ -207,11 +270,11 @@ class Kayoanime(private val sharedPref: SharedPreferences? = null) : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val files = KayoanimeParser.decodeSources(data)
-        if (files.isEmpty() || proxyKey.isEmpty()) {
-            if (proxyKey.isEmpty()) Log.w(name, NO_KEY_MESSAGE)
-            return false
-        }
+        val all = KayoanimeParser.decodeSources(data)
+        if (proxyKey.isEmpty() && all.any { !it.isIndex }) Log.w(name, NO_KEY_MESSAGE)
+        // Index files stream straight from their worker; Drive files need the proxy and its key.
+        val files = all.filter { it.isIndex || proxyKey.isNotEmpty() }
+        if (files.isEmpty()) return false
         files.forEach { file ->
             val quality = KayoanimeParser.quality(file.name, file.label)
             // The button text only earns a place when copies need telling apart, and not if it just repeats the quality.
@@ -220,7 +283,7 @@ class Kayoanime(private val sharedPref: SharedPreferences? = null) : MainAPI() {
                 .distinctBy { it.lowercase() }
             val label = if (parts.isEmpty()) name else "$name ${parts.joinToString(" · ")}"
             // The key rides in the query so external players and downloads, which cannot add headers, work too.
-            val url = "$proxyUrl/dl/${file.id}?key=${encode(proxyKey)}"
+            val url = if (file.isIndex) file.id else "$proxyUrl/dl/${file.id}?key=${encode(proxyKey)}"
             callback(newExtractorLink(name, label, url, ExtractorLinkType.VIDEO) {
                 this.quality = quality ?: Qualities.Unknown.value
             })
@@ -240,6 +303,9 @@ class Kayoanime(private val sharedPref: SharedPreferences? = null) : MainAPI() {
         private const val PROXY_PARALLEL = 4
         private const val MAX_FOLDER_DEPTH = 3
         private const val MOVIE_MAX_FILES = 3
+        private const val MAX_INDEX_PAGES = 10
+        private const val INDEX_FOLDER = "application/vnd.google-apps.folder"
+        private val shortLinks = ConcurrentHashMap<String, String>()
         private const val SERIES_CATEGORY = 4
         private const val MOVIE_CATEGORY = 2
     }

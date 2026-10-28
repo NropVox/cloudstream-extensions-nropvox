@@ -6,30 +6,56 @@ import java.net.URLDecoder
 import java.net.URLEncoder
 
 /**
- * Pure helpers for kayoanime.com posts and the Drive file names behind them. A post is a whole series (or season
- * batch); its Drive buttons are the only episode source, and the file names are hand-written, so everything that can
- * guess wrong lives here where the tests can pin it down.
+ * Pure helpers for kayoanime.com posts and the file names behind them. A post is a whole series (or season batch, or a
+ * hub of several shows); its buttons are the only episode source, and the file names are hand-written, so everything
+ * that can guess wrong lives here where the tests can pin it down.
  */
 object KayoanimeParser {
-    /** A Drive link in a post. [label] is the button text (`Season 2`, `1080p [Private Drive]`, `Movie`). */
-    data class DriveRef(val id: String, val isFolder: Boolean, val label: String)
+    /**
+     * Where a button points. [DRIVE] targets are Drive ids (file or folder), [INDEX] targets are URLs on a "Google
+     * Drive Index" worker (`https://<host>/0:/<path>/`), and [SHORT] targets are tinyurl links still to be resolved.
+     */
+    enum class Kind { DRIVE, INDEX, SHORT }
 
     /**
-     * A file found under a [DriveRef]; [label] is that button's text and [folders] the names of the folders it sits
-     * in, nearest first. Both carry the season when the file name does not (`Oregairu 2 - 01.mkv` in `… S2`).
+     * A source link in a post. [label] is the button text (`Season 2`, `1080p [Private Drive]`, `Movie`); [group] is the
+     * heading of its toggle when a post has several link toggles, which is how compilation posts name each title.
      */
-    data class DriveFile(val id: String, val name: String, val label: String, val folders: List<String> = emptyList())
+    data class Ref(val kind: Kind, val target: String, val label: String, val group: String? = null)
+
+    /**
+     * A file found under a [Ref]. [id] is a Drive id, or for index files the file's URL. [folders] are the names of the
+     * folders it sits in, nearest first; with [label] they carry the season and show the file name often leaves out.
+     */
+    data class SourceFile(
+        val id: String,
+        val name: String,
+        val label: String,
+        val folders: List<String> = emptyList(),
+        val group: String? = null,
+    ) {
+        val isIndex get() = id.startsWith("http")
+    }
 
     /** One playable entry. Several files in [files] are alternative copies of the same episode. */
-    data class Entry(val season: Int, val episode: Int, val title: String?, val files: List<DriveFile>)
+    data class Entry(val season: Int, val episode: Int, val title: String?, val files: List<SourceFile>)
+
+    /** The episodes of a post, and names for the seasons that hold a different show or arc than their number says. */
+    data class Episodes(val entries: List<Entry>, val seasonNames: Map<Int, String>)
 
     data class Details(val plot: String?, val tags: List<String>, val year: Int?, val minutes: Int?)
 
-    private val driveId = Regex("""drive\.google\.com/(?:drive/(?:u/\d+/)?folders|file/d)/([\w-]+)""")
+    private val driveId = Regex("""drive\.google\.com/(?:drive/(?:u/\d+/)?folders|file/(?:u/\d+/)?d)/([\w-]+)""")
+    private val driveParam = Regex("""drive\.google\.com/(?:open|uc)\?(?:[^#]*&)?id=([\w-]+)""")
+    private val indexUrl = Regex("""^https?://[^/]+/\d+:/""")
+    private val shortUrl = Regex("""^https?://(?:www\.)?tinyurl\.com/\w+""")
     private val postParam = Regex("""[?&]p=(\d+)""")
     private val extension = Regex("""\.([A-Za-z0-9]{2,4})$""")
     private val brackets = Regex("""\[[^\]]*\]|\([^)]*\)""")
-    private val privateDrive = Regex("""\s*\[?\s*(?:private|drivate|provide)\s+drive\s*\]?""", RegexOption.IGNORE_CASE)
+    private val spaces = Regex("""\s+""")
+    private val privateDrive = Regex("""\s*\[?\s*(?:private|drivate|provide|public)\s+drive\s*\]?""", RegexOption.IGNORE_CASE)
+    // Toggle headings that only say "the links are here", as opposed to naming a title of a compilation post.
+    private val genericHead = Regex("""^(?:download|drive|anime|links?)\b""", RegexOption.IGNORE_CASE)
 
     // `Show Episode 3 English Subbed` / `Show 1080p Dual Audio HEVC | Episode 11` / `Show (Seasons 1-3 + OVAs) 1080p …`
     private val titleSuffixes = listOf(
@@ -52,13 +78,48 @@ object KayoanimeParser {
     fun slugOf(url: String): String? =
         url.substringBefore('?').substringBefore('#').trimEnd('/').substringAfterLast('/').takeIf { it.isNotEmpty() && '.' !in it }
 
-    /** The Drive buttons of a post, each folder or file once (several buttons often share one folder). */
-    fun driveRefs(contentHtml: String): List<DriveRef> =
-        Jsoup.parse(contentHtml).select("a[href]").mapNotNull { a ->
-            val href = a.attr("href")
-            val id = driveId.find(href)?.groupValues?.get(1) ?: return@mapNotNull null
-            DriveRef(id, "/folders/" in href, a.text().trim())
-        }.distinctBy { it.id }
+    /**
+     * The source links of a post, each target once (several buttons often share one folder). Buttons are `a` tags; the
+     * latest episode of an ongoing show can also be a Drive `/preview` iframe. Google Group, Mega, Vimeo and links to
+     * other posts are not sources, and some buttons have an empty href.
+     */
+    fun refs(contentHtml: String): List<Ref> {
+        val doc = Jsoup.parse(contentHtml)
+        val links = doc.select("a[href], iframe[src]")
+        val linkToggles = links.filter { classify(it.attr("href").ifEmpty { it.attr("src") }, "") != null }
+            .mapNotNull { it.closest("div.toggle") }.distinct()
+        return links.mapNotNull { el ->
+            val text = el.text().trim()
+            if (text.contains("google group", true)) return@mapNotNull null
+            val group = if (linkToggles.size > 1) {
+                el.closest("div.toggle")?.selectFirst(".toggle-head")?.text()?.trim()?.takeIf { it.isNotEmpty() && !genericHead.containsMatchIn(it) }
+            } else null
+            classify(el.attr("href").ifEmpty { el.attr("src") }, text, group)
+        }.distinctBy { it.target }
+    }
+
+    /** A link's kind and target, or null when it is not a source (also used for where a short link redirects). */
+    fun classify(url: String, label: String, group: String? = null): Ref? {
+        val href = url.trim()
+        (driveId.find(href) ?: driveParam.find(href))?.let { return Ref(Kind.DRIVE, it.groupValues[1], label, group) }
+        if (indexUrl.containsMatchIn(href)) return Ref(Kind.INDEX, href.substringBefore('?').substringBefore('#'), label, group)
+        if (shortUrl.containsMatchIn(href)) return Ref(Kind.SHORT, href, label, group)
+        return null
+    }
+
+    /** The decoded last path segment of an index URL: `…/0:/Black%20Clover/` -> `Black Clover`; the drive root is "". */
+    fun indexName(url: String): String {
+        val segment = url.trimEnd('/').substringAfterLast('/')
+        return if (Regex("""^\d+:$""").matches(segment)) "" else dec(segment.replace("+", "%2B"))
+    }
+
+    /** A child of an index folder; names are percent-encoded per path segment (`+` too, spaces as `%20`). */
+    fun indexChild(folderUrl: String, name: String, isFolder: Boolean): String =
+        folderUrl.trimEnd('/') + "/" + enc(name).replace("+", "%20") + if (isFolder) "/" else ""
+
+    /** Each file once. A file several buttons reach keeps the copy found nearest its button, whose label fits it. */
+    fun distinctFiles(files: List<SourceFile>): List<SourceFile> =
+        files.groupBy { it.id }.map { (_, copies) -> copies.minBy { it.folders.size } }
 
     fun isVideo(name: String): Boolean {
         val ext = extension.find(name)?.groupValues?.get(1)?.lowercase() ?: return true
@@ -122,32 +183,49 @@ object KayoanimeParser {
     private val ordinalSeason = Regex("""\b(\d{1,2})(?:st|nd|rd|th)\s+season\b""", RegexOption.IGNORE_CASE)
     private val episodeWord = Regex("""\bep(?:isode)?\.?\s*(\d{1,4})\b""", RegexOption.IGNORE_CASE)
     private val dashNumber = Regex("""[-–]\s*(\d{1,4})(?:v\d+)?(?=\s|\.|$|-)""")
+    // `Blood Lad 01 She's a Skeleton Now`, `Black Butler 02`: a padded number with no dash in front.
+    private val bareNumber = Regex("""(?<=\s)(\d{2,3})(?=\s|$)""")
+    // `Usagi Drop - 02.5`, `Episode 20.5`: recap or bonus episodes between two numbered ones.
+    private val halfEpisode = Regex("""(?:[-–]\s*|\bep(?:isode)?\.?\s*)\d{1,3}\.5(?![0-9])""", RegexOption.IGNORE_CASE)
     private val specialWord = Regex(
         """(?<![A-Za-z])(?:OVAs?|OADs?|ONAs?|NCOP|NCED|SPECIALS?|MOVIES?|RECAP|OMAKE|EXTRAS?|TRAILER|PV|BONUS)(?![A-Za-z])""",
         RegexOption.IGNORE_CASE,
     )
-    private val batchName = Regex("""\bseasons?\s*\d""", RegexOption.IGNORE_CASE)
-    private val specialNumber = Regex("""(?:OVA|OAD|ONA|Movie|Special|SP)s?\s*#?(\d{1,2})\b""", RegexOption.IGNORE_CASE)
+    private val recap = Regex("""\brecap\b""", RegexOption.IGNORE_CASE)
+    // What may sit next to the special words in a folder or button that holds only extras (`OVAs & TV Specials`, `Movie 1-2`).
+    private val specialFiller = Regex("""\b(?:tv|sp|and|the|part)\b|[\d\s+&,:.\-]""", RegexOption.IGNORE_CASE)
 
     /** What a file name says about itself; [season] and [episode] are null where it says nothing. */
     data class Slot(val season: Int?, val episode: Int?, val special: Boolean)
 
     fun slot(fileName: String, label: String, folders: List<String> = emptyList()): Slot {
-        val base = fileName.replace(extension, "")
-        val plain = base.replace(brackets, " ").replace(Regex("""\s+"""), " ").trim()
-        seasonEpisode.find(plain)?.let { return Slot(it.groupValues[1].toInt(), it.groupValues[2].toInt(), false) }
-
-        val context = folders + label
-        // Only a short name that is not a batch title (`Season 1 + OVAs`, `Seasons 1-3 + OVAs`) makes its files special.
-        val special = specialWord.containsMatchIn(base) ||
-            context.any { it.length <= 30 && specialWord.containsMatchIn(it) && !batchName.containsMatchIn(it) }
-        if (special) {
-            val number = specialNumber.find(base)?.groupValues?.get(1)?.toIntOrNull() ?: lastDashNumber(plain)
-            return Slot(0, number, true)
+        val plain = plainName(fileName)
+        seasonEpisode.find(plain)?.let {
+            val season = it.groupValues[1].toInt()
+            // `S03E17 Recap` sits beside the real S03E17.
+            return Slot(season, it.groupValues[2].toInt(), season == 0 || recap.containsMatchIn(plain))
         }
-        val season = seasonNumber(plain) ?: context.firstNotNullOfOrNull(::seasonNumber)
-        val episode = episodeWord.find(plain)?.groupValues?.get(1)?.toIntOrNull() ?: lastDashNumber(plain)
+        val base = fileName.replace(extension, "")
+        if (halfEpisode.containsMatchIn(plain)) return Slot(0, null, true)
+        if (specialWord.containsMatchIn(base) || (folders + label).any(::onlyExtras)) return Slot(0, null, true)
+        val season = seasonNumber(plain) ?: (folders + label).firstNotNullOfOrNull(::seasonNumber)
+        val episode = episodeWord.find(plain)?.groupValues?.get(1)?.toIntOrNull()
+            ?: lastDashNumber(plain) ?: bareNumber.find(plain)?.groupValues?.get(1)?.toIntOrNull()
         return Slot(season, episode, false)
+    }
+
+    /** A folder or button that holds only extras (`Specials`, `OVAs`, `Movie 1-2 [Private Drive]`), not `Blood Lad + OVA`. */
+    private fun onlyExtras(name: String): Boolean {
+        val text = name.replace(privateDrive, " ").replace(brackets, " ")
+        return specialWord.containsMatchIn(text) && text.replace(specialWord, " ").replace(specialFiller, "").isEmpty()
+    }
+
+    /** The name without extension, brackets and release tags, so `X.265` or `5.1` never read as episode numbers. */
+    private fun plainName(fileName: String): String {
+        val plain = fileName.replace(extension, "").replace(brackets, " ").replace(releaseTags, " ").replace('_', ' ')
+        // `Psycho-Pass.The.Movie.1080p` uses dots for spaces.
+        val spaced = if (' ' !in plain.trim() && plain.count { it == '.' } > 1) plain.replace('.', ' ') else plain
+        return spaced.replace(spaces, " ").trim()
     }
 
     private fun lastDashNumber(text: String): Int? = dashNumber.findAll(text).lastOrNull()?.groupValues?.get(1)?.toIntOrNull()
@@ -156,48 +234,161 @@ object KayoanimeParser {
         (seasonWord.find(text) ?: ordinalSeason.find(text))?.groupValues?.get(1)?.toIntOrNull()
 
     /** `[Kayoanime] Blue Lock - S01E01 [1080p]….mkv` -> `Blue Lock - S01E01`; names specials in the episode list. */
-    fun displayName(fileName: String): String =
-        fileName.replace(extension, "").replace(brackets, " ").replace('_', ' ').replace(Regex("""\s+"""), " ").trim()
+    fun displayName(fileName: String): String {
+        val raw = fileName.replace(extension, "").replace('_', ' ')
+        val base = if (' ' !in raw.trim() && raw.count { it == '.' } > 1) raw.replace('.', ' ') else raw
+        val name = base.replace(brackets, " ").replace(spaces, " ").trim().trim('-', ' ', '.')
+        // `Code：Breaker][OVA1]` has unbalanced brackets: keep their text rather than show `Code：Breaker]`.
+        return if (name.isEmpty() || '[' in name || ']' in name) base.replace(Regex("""[\[\]]"""), " ").replace(spaces, " ").trim() else name
+    }
+
+    // Release tags in folder names: `Kimi ni Todoke (Season 1) [BD 1080p]` and `720p | Dual Audio` both leave the show.
+    private val releaseTags = Regex(
+        """\b(?:\d{3,4}p|bd(?:rip)?|bluray|blu-ray|web(?:-?dl|rip)?|hevc|[xh][\s.]?26[45]|10\s*-?bit|dual[\s._-]*audio|""" +
+            """eng(?:lish)?[\s-]*subs?|multi[\s-]*subs?|flac|aac|opus|e?ac3|[257]\.[01]|batch|complete|uncensored|kayoanime)\b|\|""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val seasonTokens = Regex(
+        """\b(?:seasons?\s*\d+(?:\s*-\s*\d+)?|s\d{1,2}|\d{1,2}(?:st|nd|rd|th)\s+season|box\s*\d+)\b""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val episodeMarkers = listOf(seasonEpisode, episodeWord, halfEpisode, dashNumber, bareNumber, specialWord)
+
+    /** The show a file name is about: `Code Geass S1 - 01` -> `Code Geass`, `S01E01-Title [8B42].mkv` -> "". */
+    private fun fileShow(fileName: String): String {
+        val plain = plainName(fileName)
+        val cut = episodeMarkers.mapNotNull { it.find(plain)?.range?.first }.minOrNull() ?: plain.length
+        return cleanShow(plain.substring(0, cut))
+    }
+
+    /** A folder or button text reduced to a show name: release tags, seasons and `[Private Drive]` removed. */
+    private fun cleanShow(text: String): String =
+        Parser.unescapeEntities(text, false).replace(privateDrive, " ").replace(brackets, " ").replace(releaseTags, " ")
+            .replace(seasonTokens, " ").replace(spaces, " ").trim().trim('-', ':', '–', ' ', '.', ',', '+', '&')
+            .takeIf { name -> name.count { it.isLetterOrDigit() } >= 2 && !onlyExtras(name) }.orEmpty()
+
+    private fun showKey(name: String) = name.lowercase().replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim()
 
     /**
-     * Turns the files of a post into numbered entries. Files that name no season take the season of their button
-     * (`Season 2`), else 1; specials, movies and OVAs go to season 0. Two files claiming the same slot are kept
-     * together as alternative sources, because they are usually two releases of one episode.
+     * The names a post title gives its show: `Chaika: The Coffin Princess (Hitsugi no Chaika) (Season 1-2)` ->
+     * both titles. Files named either way are the same show, so their copies merge instead of becoming two seasons.
      */
-    fun entries(files: List<DriveFile>): List<Entry> {
-        val placed = files.filter { isVideo(it.name) }.map { file ->
-            val slot = slot(file.name, file.label, file.folders)
-            file to Slot(slot.season ?: if (slot.special) 0 else 1, slot.episode, slot.special)
-        }
-        val nextFree = HashMap<Int, Int>()
-        placed.forEach { (_, s) -> if (s.episode != null) nextFree.merge(s.season!!, s.episode + 1, ::maxOf) }
+    fun aliases(postTitle: String): List<String> {
+        val title = cleanTitle(postTitle)
+        val parts = listOf(title.substringBefore('(')) + Regex("""\(([^)]*)\)""").findAll(title).map { it.groupValues[1] }
+        return parts.map { showKey(cleanShow(it)) }.filter { key -> key.any { it.isLetter() } }.distinct()
+    }
 
-        val bySlot = LinkedHashMap<Pair<Int, Int>, MutableList<Pair<DriveFile, Slot>>>()
-        for ((file, s) in placed) {
-            val number = s.episode ?: (nextFree[s.season!!] ?: 1).also { nextFree[s.season] = it + 1 }
-            bySlot.getOrPut(s.season!! to number) { mutableListOf() }.add(file to s)
+    /** The show of a file: its own name, else the nearest folder that names one, else its button, else its toggle. */
+    private fun showOf(file: SourceFile): String =
+        fileShow(file.name).ifEmpty { (file.folders + file.label).map(::cleanShow).firstOrNull { it.isNotEmpty() }.orEmpty() }
+
+    /**
+     * How a season holding [file]'s show is named when it has to move: its toggle, subfolder, own name, button or
+     * folder. The button comes late because several buttons of a post can share one folder (`Prisoners of the Sky`,
+     * `Signs of Holy War` and `Grudge of Edinburgh` all open `Nanatsu`).
+     */
+    private fun seasonName(file: SourceFile, show: String): String {
+        val subfolders = file.folders.dropLast(1).map(::cleanShow)
+        return (listOfNotNull(file.group?.let(::cleanShow)) + subfolders + fileShow(file.name) + cleanShow(file.label) +
+            file.folders.takeLast(1).map(::cleanShow)).firstOrNull { it.isNotEmpty() } ?: show
+    }
+
+    /**
+     * Turns the files of a post into numbered entries. Files that name no season take the season of their folder or
+     * button (`Season 2`), else 1. Files of one show that claim the same slot are alternative copies (BD and WEB
+     * releases, 1080p and 720p). A different show or arc that lands on a slot already taken (`Code Geass S1 - 01`
+     * next to `Code Geass - Dakkan no Roze - 01`) moves whole to new seasons named after it. Specials, movies, OVAs
+     * and half episodes go to season 0, one entry per file in post order. [aliases] are the post's names for its show.
+     */
+    fun entries(files: List<SourceFile>, aliases: List<String> = emptyList()): Episodes {
+        data class Placed(val file: SourceFile, val season: Int, val episode: Int?, val explicit: Boolean)
+        data class Show(val key: String, val name: String, val files: MutableList<Placed> = mutableListOf())
+
+        val videos = files.filter { isVideo(it.name) }
+        val specials = mutableListOf<SourceFile>()
+        val shows = LinkedHashMap<String, Show>()
+        for (file in videos) {
+            val slot = slot(file.name, file.label, file.folders)
+            if (slot.special) {
+                specials += file
+                continue
+            }
+            val name = showOf(file)
+            // In a compilation post each toggle is its own title even when the files share a show name.
+            val key = (file.group?.let { showKey(it) + "|" } ?: "") + showKey(name).let { if (it in aliases) MAIN_SHOW else it }
+            shows.getOrPut(key) { Show(key, name) }.files += Placed(file, slot.season ?: 1, slot.episode, slot.season != null)
         }
-        return bySlot.map { (key, group) ->
-            val (season, number) = key
-            val title = if (season == 0) displayName(group.first().first.name) else null
-            Entry(season, number, title, group.map { it.first })
-        }.sortedWith(compareBy({ if (it.season == 0) Int.MAX_VALUE else it.season }, { it.episode }))
+
+        val owner = HashMap<Pair<Int, Int>, String>()
+        val bySlot = LinkedHashMap<Pair<Int, Int>, MutableList<SourceFile>>()
+        val titles = HashMap<Pair<Int, Int>, String>()
+        val names = HashMap<Int, String>()
+        var nextSeason = (shows.values.flatMap { s -> s.files.map { it.season } }.maxOrNull() ?: 0) + 1
+        val seasonOf = HashMap<String, Map<Int, Int>>()
+
+        // The titles of a compilation post that are single files (a movie list) take the first numbers of their season,
+        // then shows whose files say their season claim their slots; the rest yield to them.
+        val standalone = { s: Show -> s.files.all { it.episode == null && it.file.group != null } }
+        val order = shows.values.sortedWith(compareByDescending<Show>(standalone).thenByDescending { s -> s.files.any { it.explicit } })
+        fun appendUnnumbered(show: Show, placed: Placed) {
+            val season = seasonOf[show.key]!![placed.season]!!
+            val number = (bySlot.keys.filter { it.first == season }.maxOfOrNull { it.second } ?: 0) + 1
+            owner[season to number] = show.key
+            bySlot[season to number] = mutableListOf(placed.file)
+            // A toggle heading names its title only when the toggle holds that one file.
+            titles[season to number] = placed.file.group?.takeIf { show.files.size == 1 } ?: displayName(placed.file.name)
+        }
+        for (show in order) {
+            if (standalone(show)) {
+                seasonOf[show.key] = show.files.map { it.season }.distinct().associateWith { it }
+                show.files.forEach { appendUnnumbered(show, it) }
+                continue
+            }
+            val numbered = show.files.filter { it.episode != null }
+            val clash = numbered.any { owner[it.season to it.episode!!]?.let { o -> o != show.key } == true }
+            val native = show.files.map { it.season }.distinct().sorted()
+            seasonOf[show.key] = if (!clash) native.associateWith { it } else native.associateWith { season ->
+                val moved = nextSeason++
+                val name = seasonName(show.files.first { it.season == season }.file, show.name)
+                names[moved] = if (native.size > 1 || season > 1) "$name Season $season" else name
+                moved
+            }
+            for (placed in numbered) {
+                val key = seasonOf[show.key]!![placed.season]!! to placed.episode!!
+                owner[key] = show.key
+                bySlot.getOrPut(key) { mutableListOf() } += placed.file
+            }
+        }
+        // Files without a number (movies in a list, a lone episode) take the next free number of their season.
+        for (show in shows.values.filterNot(standalone)) {
+            show.files.filter { it.episode == null }.forEach { appendUnnumbered(show, it) }
+        }
+        val regular = bySlot.map { (key, group) -> Entry(key.first, key.second, titles[key], group) }
+        val extras = specials.mapIndexed { i, file -> Entry(0, i + 1, displayName(file.name), listOf(file)) }
+        val sorted = (regular + extras).sortedWith(compareBy({ if (it.season == 0) Int.MAX_VALUE else it.season }, { it.episode }))
+        return Episodes(sorted, names)
     }
 
     // ---- links ---------------------------------------------------------------------------------------------
 
-    /** Episode `data`: `https://drive.google.com/file/d/<id>/view#<name>&<label>`, copies separated by `|`. */
-    fun encodeSources(files: List<DriveFile>): String = files.joinToString("|") {
-        "https://drive.google.com/file/d/${it.id}/view#${enc(it.name)}&${enc(it.label)}"
+    /**
+     * Episode `data`: `https://drive.google.com/file/d/<id>/view#<name>&<label>` for Drive files, `<index file url>#…`
+     * for index files, copies separated by `|`.
+     */
+    fun encodeSources(files: List<SourceFile>): String = files.joinToString("|") {
+        val url = if (it.isIndex) it.id else "https://drive.google.com/file/d/${it.id}/view"
+        "$url#${enc(it.name)}&${enc(it.label)}"
     }
 
-    fun decodeSources(data: String): List<DriveFile> = data.split('|').mapNotNull { part ->
-        val id = driveId.find(part)?.groupValues?.get(1) ?: return@mapNotNull null
+    fun decodeSources(data: String): List<SourceFile> = data.split('|').mapNotNull { part ->
+        val url = part.substringBefore('#')
+        val id = driveId.find(url)?.groupValues?.get(1) ?: url.takeIf { indexUrl.containsMatchIn(it) } ?: return@mapNotNull null
         val fragment = part.substringAfter('#', "")
-        DriveFile(id, dec(fragment.substringBefore('&')), dec(fragment.substringAfter('&', "")))
+        SourceFile(id, dec(fragment.substringBefore('&')), dec(fragment.substringAfter('&', "")))
     }
 
-    private val resolution = Regex("""(?<![0-9])(2160|1440|1080|720|576|480|360)p""", RegexOption.IGNORE_CASE)
+    private val resolution = Regex("""(?<![0-9])(2160|1440|1080|720|576|480|420|360)p""", RegexOption.IGNORE_CASE)
 
     /** Height from the file name, else from the button label (`1080p [Private Drive]`); null when neither says. */
     fun quality(fileName: String, label: String): Int? =
@@ -223,6 +414,8 @@ object KayoanimeParser {
 
     /** The button text without the `[Private Drive]` marker (and its typos), for naming alternative copies. */
     fun shortLabel(label: String): String = label.replace(privateDrive, "").trim()
+
+    private const val MAIN_SHOW = "\u0000main"
 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
     private fun dec(s: String) = runCatching { URLDecoder.decode(s, "UTF-8") }.getOrDefault(s)

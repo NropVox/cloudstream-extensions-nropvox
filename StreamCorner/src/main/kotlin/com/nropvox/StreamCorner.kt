@@ -21,6 +21,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -28,7 +29,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
+import okhttp3.Request
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 /**
  * streamcorner.st is a React SPA whose schedules come from Cloudflare Workers (`data.*.workers.dev/corner?p=…`)
@@ -134,12 +138,18 @@ class StreamCorner internal constructor(private val bridgeFactory: (String) -> S
                             }
                             val seen = manifest?.headers.orEmpty()
                             Log.i(name, "$label -> $url $seen")
+                            val referer = seen.entries.firstOrNull { it.key.equals("Referer", true) }?.value.orEmpty()
+                            val headers = listOfNotNull(
+                                seen.entries.firstOrNull { it.key.equals("Origin", true) }?.let { "Origin" to it.value },
+                                manifest?.userAgent?.let { "User-Agent" to it },
+                            ).toMap()
+                            if (isDrm(url, headers + listOfNotNull(referer.ifEmpty { null }?.let { "Referer" to it }))) {
+                                Log.w(name, "skipping DRM-encrypted $label $url")
+                                return@withPermit false
+                            }
                             val link = newExtractorLink(name, "$name $label", url, ExtractorLinkType.M3U8) {
-                                referer = seen.entries.firstOrNull { it.key.equals("Referer", true) }?.value.orEmpty()
-                                headers = listOfNotNull(
-                                    seen.entries.firstOrNull { it.key.equals("Origin", true) }?.let { "Origin" to it.value },
-                                    manifest?.userAgent?.let { "User-Agent" to it },
-                                ).toMap()
+                                this.referer = referer
+                                this.headers = headers
                                 StreamCornerParser.quality(label)?.let { quality = it }
                             }
                             callback(link)
@@ -155,6 +165,39 @@ class StreamCorner internal constructor(private val bridgeFactory: (String) -> S
             }.awaitAll()
         }
         return found.any { it }
+    }
+
+    /**
+     * Whether [url] is a Widevine/PlayReady HLS feed (e.g. NBA League Pass `hls-wvpr`), which the player can't open.
+     * Keys sit in the master's session keys or only in the variants, so a master without them costs one more fetch.
+     * An unreachable playlist counts as playable: the player gets to try it.
+     */
+    private suspend fun isDrm(url: String, headers: Map<String, String>): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val master = fetchPlaylist(url, headers)
+            StreamCornerParser.isDrm(master) ||
+                StreamCornerParser.firstVariant(master, url)?.let { StreamCornerParser.isDrm(fetchPlaylist(it, headers)) } == true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(name, "DRM check failed for $url: ${e.message}")
+            false
+        }
+    }
+
+    private fun fetchPlaylist(url: String, headers: Map<String, String>): String {
+        val request = Request.Builder().url(url).apply { headers.forEach { (k, v) -> header(k, v) } }.build()
+        return probeClient.newCall(request).execute().use { res ->
+            if (!res.isSuccessful) throw IllegalStateException("HTTP ${res.code}")
+            res.body.string()
+        }
+    }
+
+    /** NiceHttp's timeout doesn't bound the 30 s connect, so playlist checks use their own short-timeout client. */
+    private val probeClient by lazy {
+        app.baseClient.newBuilder()
+            .connectTimeout(5, TimeUnit.SECONDS).readTimeout(5, TimeUnit.SECONDS).callTimeout(8, TimeUnit.SECONDS)
+            .build()
     }
 
     /** A provider's schedule as the site would show it: ended events dropped, except NBA games with replays. */

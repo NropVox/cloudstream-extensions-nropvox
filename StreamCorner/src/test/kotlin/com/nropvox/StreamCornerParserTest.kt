@@ -151,6 +151,23 @@ class StreamCornerParserTest {
         assertFalse(StreamCornerParser.isDash("https://otte.cache.aiv-cdn.net/x/cenc_video_7_0_init.mp4?m=1781704769"))
     }
 
+    // lpnba.akamaized.net/live-pz/p/hls-wvpr/… from the NBA embeds; the phone's player threw UnsupportedDrmException.
+    @Test fun drmPlaylists() {
+        assertTrue(StreamCornerParser.isDrm(text("nba-wvpr-master.m3u8")))
+        assertFalse(StreamCornerParser.isDrm(text("nba-wvpr-master-nokeys.m3u8")))
+        assertTrue(StreamCornerParser.isDrm("#EXTM3U\n#EXT-X-KEY:METHOD=SAMPLE-AES-CTR,URI=\"data:x\",KEYFORMAT=\"urn:uuid:edef8ba9-79d6-4ace-a3c8-27dcd51d21ed\"\n#EXTINF:4,\na.m4s"))
+        assertFalse(StreamCornerParser.isDrm(text("cnn-variant.m3u8")))
+        assertFalse(StreamCornerParser.isDrm("#EXTM3U\n#EXT-X-KEY:METHOD=NONE\n#EXTINF:4,\na.ts"))
+    }
+
+    @Test fun masterFirstVariant() {
+        val master = "https://lpnba.akamaized.net/live-pz/p/hls-wvpr/g0022600143lal1000461lac/index.m3u8?vpmute=0"
+        val variant = StreamCornerParser.firstVariant(text("nba-wvpr-master-nokeys.m3u8"), master)!!
+        assertTrue(variant, variant.startsWith("https://lpnba.akamaized.net/live-pz/p/hls-wvpr/g0022600143lal1000461lac/v4-121.m3u8?vpmute=0&"))
+        assertEquals("https://h/a/b/low.m3u8", StreamCornerParser.firstVariant("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\n\n/a/b/low.m3u8\n", "https://h/x/index.m3u8"))
+        assertNull(StreamCornerParser.firstVariant(text("cnn-variant.m3u8"), "https://h/x.m3u8"))
+    }
+
     @Test fun harnessPages() {
         assertTrue(StreamCornerParser.bridgeHtml("/assets/BCJZAtsV.js").contains("""new Worker("/assets/BCJZAtsV.js", {type: 'module'"""))
         assertTrue(StreamCornerParser.playerHtml("https://e/x?p=a&b=\"c").contains("""src="https://e/x?p=a&amp;b=&quot;c""""))

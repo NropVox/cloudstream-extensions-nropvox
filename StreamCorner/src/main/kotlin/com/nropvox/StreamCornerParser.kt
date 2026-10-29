@@ -216,6 +216,23 @@ object StreamCornerParser {
 
     fun isDash(url: String): Boolean = dash.containsMatchIn(url.substringBefore('#'))
 
+    private val keyMethod = Regex("""^#EXT-X-(?:SESSION-)?KEY:.*?\bMETHOD=([A-Z0-9-]+)""", RegexOption.MULTILINE)
+
+    /**
+     * True when an HLS playlist is encrypted with a DRM key system (Widevine/PlayReady/FairPlay `SAMPLE-AES*`), which
+     * the app's player rejects with UnsupportedDrmException. Plain AES-128 plays fine.
+     */
+    fun isDrm(playlist: String): Boolean =
+        keyMethod.findAll(playlist).any { it.groupValues[1] != "NONE" && it.groupValues[1] != "AES-128" }
+
+    /** The first variant of a master playlist, made absolute against [playlistUrl]; null for a media playlist. */
+    fun firstVariant(playlist: String, playlistUrl: String): String? {
+        val lines = playlist.lineSequence().map { it.trim() }.toList()
+        val inf = lines.indexOfFirst { it.startsWith("#EXT-X-STREAM-INF") }.takeIf { it >= 0 } ?: return null
+        val uri = lines.drop(inf + 1).firstOrNull { it.isNotEmpty() && !it.startsWith("#") } ?: return null
+        return java.net.URI(playlistUrl).resolve(uri).toString()
+    }
+
     /** The page that starts the site's worker; served by the WebView at a streamcorner.st URL. */
     fun bridgeHtml(workerPath: String): String = """<!doctype html><html><head><meta charset="utf-8"></head><body><script>
 let w;

@@ -1,6 +1,6 @@
 package com.nropvox
 
-import android.util.Base64
+import kotlin.io.encoding.Base64
 import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
@@ -18,7 +18,7 @@ internal object TonkaCineDecoder {
         MessageDigest.getInstance("SHA-256").digest("$nonce|$VIDNEST_SECRET".toByteArray(Charsets.UTF_8)))
 
     private fun decrypt(payload: String, key: ByteArray): String {
-        val bytes = Base64.decode(payload, Base64.URL_SAFE or Base64.NO_WRAP)
+        val bytes = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL).decode(payload)
         require(bytes.size >= 28) { "Incomplete player payload" }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))

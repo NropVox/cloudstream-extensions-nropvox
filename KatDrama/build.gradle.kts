@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     authors = listOf("NropVox")
@@ -7,6 +7,8 @@ cloudstream {
     status = 1
     tvTypes = listOf("AsianDrama", "Movie")
     iconUrl = "https://www.google.com/s2/favicons?domain=k-drama.in&sz=%size%"
+
+    isCrossPlatform = true
 }
 
 dependencies {

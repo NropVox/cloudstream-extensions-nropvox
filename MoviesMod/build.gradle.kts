@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     authors = listOf("NropVox")
@@ -7,4 +7,6 @@ cloudstream {
     status = 1
     tvTypes = listOf("Movie", "TvSeries", "Anime")
     iconUrl = "https://www.google.com/s2/favicons?domain=moviesmod.meme&sz=%size%"
+
+    isCrossPlatform = true
 }

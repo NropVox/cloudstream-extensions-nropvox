@@ -1,6 +1,6 @@
 package com.nropvox
 
-import android.util.Base64
+import kotlin.io.encoding.Base64
 import com.fasterxml.jackson.databind.JsonNode
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.SubtitleFile
@@ -85,8 +85,8 @@ internal object TonkaCineResolver {
         }
 
         suspend fun vidnest(provider: String) {
-            val nonce = Base64.encodeToString(ByteArray(16).also { SecureRandom().nextBytes(it) },
-                Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+            val nonce = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
+                .encode(ByteArray(16).also { SecureRandom().nextBytes(it) })
             val headers = browserHeaders + mapOf("Referer" to "https://vidnest.fun/", "Origin" to "https://vidnest.fun")
             val envelope = json("https://new.vidnest.fun/$provider/$path?_n=$nonce", headers)
             val result = if (envelope.get("v")?.asInt() == 2) {

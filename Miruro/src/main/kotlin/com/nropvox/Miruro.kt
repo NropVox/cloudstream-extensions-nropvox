@@ -1,6 +1,6 @@
 package com.nropvox
 
-import android.util.Base64
+import kotlin.io.encoding.Base64
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.JsonNode
 import com.lagradost.api.Log
@@ -414,7 +414,7 @@ class Miruro : MainAPI() {
         private fun obfuscate(value: String): String {
             val bytes = value.toByteArray(Charsets.UTF_8)
             for (i in bytes.indices) bytes[i] = (bytes[i].toInt() xor key[i % key.size].toInt()).toByte()
-            return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+            return Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL).encode(bytes)
         }
     }
 

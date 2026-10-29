@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 cloudstream {
     authors = listOf("NropVox")
@@ -7,4 +7,6 @@ cloudstream {
     status = 1
     tvTypes = listOf("Anime", "AnimeMovie", "OVA")
     iconUrl = "https://www.google.com/s2/favicons?domain=reanime.to&sz=%size%"
+
+    isCrossPlatform = true
 }

@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     authors = listOf("NropVox")
@@ -7,4 +7,6 @@ cloudstream {
     status = 3
     tvTypes = listOf("Movie", "TvSeries")
     iconUrl = "https://www.google.com/s2/favicons?domain=multi.tonkacine.watch&sz=%size%"
+
+    isCrossPlatform = true
 }

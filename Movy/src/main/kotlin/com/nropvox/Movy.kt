@@ -1,6 +1,6 @@
 package com.nropvox
 
-import android.util.Base64
+import kotlin.io.encoding.Base64
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.Actor
@@ -253,7 +253,7 @@ class Movy : MainAPI() {
                     return null
                 }
                 val blob = response.text.trim().trim('"')
-                val bytes = Base64.decode(blob, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+                val bytes = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL).decode(blob)
                 val json = MovyDecoder.decrypt(bytes, currentSeed, mediaId)
                     ?: return null.also { Log.w(name, "$server: payload did not decrypt") }
                 return tryParseJson<MovySources>(json)

@@ -1,6 +1,5 @@
 package com.nropvox
 
-import android.media.MediaCodecList
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.ErrorLoadingException
@@ -204,11 +203,20 @@ class HStream : MainAPI() {
         return shuffled.firstOrNull()
     }
 
-    /** Hardware or platform software decoder; desktop builds have no MediaCodecList and get every quality. */
+    /**
+     * Hardware or platform software decoder; desktop builds have no MediaCodecList and get every quality.
+     * Reached by reflection so the cross-platform jar carries no android.* reference.
+     */
     private val av1Supported: Boolean by lazy {
         try {
-            MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
-                !info.isEncoder && info.supportedTypes.any { it.equals("video/av01", ignoreCase = true) }
+            val codecList = Class.forName("android.media.MediaCodecList")
+            val codecInfo = Class.forName("android.media.MediaCodecInfo")
+            val regularCodecs = codecList.getField("REGULAR_CODECS").getInt(null)
+            val list = codecList.getConstructor(Int::class.javaPrimitiveType).newInstance(regularCodecs)
+            (codecList.getMethod("getCodecInfos").invoke(list) as Array<*>).any { info ->
+                codecInfo.getMethod("isEncoder").invoke(info) == false &&
+                    (codecInfo.getMethod("getSupportedTypes").invoke(info) as Array<*>)
+                        .any { (it as String).equals("video/av01", ignoreCase = true) }
             }
         } catch (e: Throwable) {
             true

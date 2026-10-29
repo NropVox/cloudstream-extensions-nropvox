@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     authors = listOf("NropVox")
@@ -16,6 +16,8 @@ cloudstream {
     status = 1 // will be 3 if unspecified
     tvTypes = listOf("Movie", "TvSeries")
     iconUrl = "https://www.google.com/s2/favicons?domain=movy.sx&sz=%size%"
+
+    isCrossPlatform = true
 }
 
 // Cloudstream's inline JSON and key APIs use Java 11 bytecode.

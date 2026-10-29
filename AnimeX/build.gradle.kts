@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     authors = listOf("NropVox")
@@ -16,4 +16,6 @@ cloudstream {
     status = 1 // will be 3 if unspecified
     tvTypes = listOf("Anime", "AnimeMovie", "OVA")
     iconUrl = "https://www.google.com/s2/favicons?domain=animex.one&sz=%size%"
+
+    isCrossPlatform = true
 }

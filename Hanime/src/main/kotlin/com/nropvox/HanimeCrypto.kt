@@ -1,6 +1,6 @@
 package com.nropvox
 
-import android.util.Base64
+import kotlin.io.encoding.Base64
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import java.security.MessageDigest
@@ -54,10 +54,11 @@ object HanimeCrypto {
 
     private fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)
 
-    private fun b64(bytes: ByteArray) =
-        Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+    private val base64 = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
 
-    private fun unb64(value: String) = Base64.decode(value, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+    private fun b64(bytes: ByteArray) = base64.encode(bytes)
+
+    private fun unb64(value: String) = base64.decode(value)
 
     data class Envelope(val iv: String, val tag: String, val data: String)
 }

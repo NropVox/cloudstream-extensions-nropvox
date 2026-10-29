@@ -216,6 +216,78 @@ object StreamCornerParser {
 
     fun isDash(url: String): Boolean = dash.containsMatchIn(url.substringBefore('#'))
 
+    internal fun drmStream(json: String): SCDrmStream {
+        val result = mapper.readValue(json, SCDrmStream::class.java)
+        require(java.net.URI(result.url).scheme in listOf("https", "http")) { "Invalid media URL" }
+        require(isManifest(result.url) || isDash(result.url)) { "Unsupported media format" }
+        require(result.keys.size <= 32 && result.keys.all {
+            it.kid.matches(Regex("[0-9a-f]{32}")) && it.key.matches(Regex("[0-9a-f]{32}"))
+        }) { "Invalid ClearKey configuration" }
+        require(result.keys.distinctBy { it.kid }.size == result.keys.size) { "Duplicate key IDs" }
+        return result
+    }
+
+    internal fun legacyDrmStream(payload: String): SCDrmStream? = runCatching {
+        val config = mapper.readTree(payload)
+        val url = config.get("stream_url")?.takeIf { it.isTextual }?.asText() ?: return null
+        val value = config.get("stream_keys")
+        require(value == null || value.isNull || value.isTextual)
+        val key = value?.takeIf { !it.isNull }?.asText().orEmpty().trim()
+        val keys = if (key.isEmpty()) emptyList() else {
+            val pair = key.lowercase().split(':')
+            require(pair.size == 2)
+            listOf(SCClearKey(pair[0], pair[1]))
+        }
+        drmStream(mapper.writeValueAsString(SCDrmStream(config.get("name")?.asText(), url, keys)))
+    }.getOrNull()
+
+    /** Runs only import-free decoder modules, without loading the embed/player or starting media playback. */
+    internal fun drmHtml(payload: StreamCornerDrm.Module, keys: StreamCornerDrm.Module, token: String): String {
+        val p = StreamCornerDrm.payloadAbi
+        val k = StreamCornerDrm.keyAbi
+        return """<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+(async function () {
+  async function open(code, name) {
+    const bytes = Uint8Array.from(atob(code), c => c.charCodeAt(0));
+    const module = await WebAssembly.compile(bytes);
+    if (WebAssembly.Module.imports(module).length) throw Error('Unexpected decoder imports');
+    const e = (await WebAssembly.instantiate(module, {})).exports;
+    if (e._initialize) e._initialize();
+    if (typeof e[name] !== 'function' || e[name].length !== 5) throw Error('Decoder changed');
+    return e;
+  }
+  function run(e, name, input, at, out, cap, args, expected) {
+    const m = new Uint8Array(e.memory.buffer);
+    try {
+      m.set(input, at);
+      const size = e[name].apply(null, args);
+      if (!Number.isInteger(size) || size < 1 || size > cap || (expected && size !== expected)) throw Error('Invalid decoder result');
+      return m.slice(out, out + size);
+    } finally { m.fill(0, at, at + input.length); m.fill(0, out, out + cap); input.fill(0); }
+  }
+  function hex(bytes) { return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join(''); }
+  const pn = ${mapper.writeValueAsString(payload.exportName)}, kn = ${mapper.writeValueAsString(keys.exportName)};
+  const pe = await open(${mapper.writeValueAsString(payload.base64)}, pn);
+  const input = new TextEncoder().encode(${mapper.writeValueAsString(token)});
+  if (!input.length || input.length > ${p.capacity}) throw Error('Invalid embed token');
+  const plain = run(pe, pn, input, ${p.input}, ${p.output}, ${p.capacity}, [input.length, ${p.input}, ${p.capacity}, ${p.output}, ${p.selector}]);
+  let config;
+  try { config = JSON.parse(new TextDecoder('utf-8', {fatal:true}).decode(plain)); } finally { plain.fill(0); }
+  if (!Array.isArray(config.c) || config.c.length > 32) throw Error('Invalid stream keys');
+  const ke = config.c.length ? await open(${mapper.writeValueAsString(keys.base64)}, kn) : null;
+  const result = [];
+  for (const pair of config.c) {
+    if (!/^[0-9a-f]{32}${'$'}/.test(pair.i) || !/^[0-9a-f]{88}${'$'}/.test(pair.k)) throw Error('Invalid wrapped key');
+    const joined = pair.i + pair.k;
+    const raw = Uint8Array.from(joined.match(/../g), b => parseInt(b, 16));
+    const key = run(ke, kn, raw, ${k.input}, ${k.output}, ${k.capacity}, [${k.input}, ${k.selector}, ${k.output}, ${k.capacity}, raw.length], 16);
+    result.push({kid:pair.i, key:hex(key)}); key.fill(0);
+  }
+  CsDecoder.reply(JSON.stringify({name:config.n, url:config.u, keys:result}));
+})().catch(function (e) { CsDecoder.failed(String(e && e.message || e)); });
+</script></body></html>"""
+    }
+
     private val keyMethod = Regex("""^#EXT-X-(?:SESSION-)?KEY:.*?\bMETHOD=([A-Z0-9-]+)""", RegexOption.MULTILINE)
 
     /**

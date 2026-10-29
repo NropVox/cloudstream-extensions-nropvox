@@ -121,6 +121,32 @@ internal class StreamCornerBridge(private val context: Context, private val orig
         workerPath = null
     }
 
+    /** A separate short-lived WebView executes the site's two pure WASM decoders. */
+    suspend fun decode(payload: StreamCornerDrm.Module, keys: StreamCornerDrm.Module, token: String): SCDrmStream {
+        val result = CompletableDeferred<String>()
+        val url = "$origin/__cs/decoder.html"
+        val html = StreamCornerParser.drmHtml(payload, keys, token)
+        var view: WebView? = null
+        try {
+            withContext(Dispatchers.Main) {
+                val decoder = newView(url, html, onRequest = { _, _, _ ->
+                    WebResourceResponse("text/plain", "utf-8", ByteArrayInputStream(ByteArray(0)))
+                })
+                view = decoder
+                decoder.addJavascriptInterface(object {
+                    @JavascriptInterface fun reply(json: String) { result.complete(json) }
+                    @JavascriptInterface fun failed(message: String) {
+                        result.completeExceptionally(IllegalStateException(message))
+                    }
+                }, "CsDecoder")
+                decoder.loadUrl(url)
+            }
+            return StreamCornerParser.drmStream(withTimeout(LOAD_TIMEOUT_MS) { result.await() })
+        } finally {
+            view?.let { withContext(NonCancellable + Dispatchers.Main) { it.stopLoading(); it.destroy() } }
+        }
+    }
+
     /**
      * Frames [embedUrl] in a site-origin page and returns the first HLS playlist its player requests, answered with
      * a 404 so nothing plays in the background. Null when the player loads a DASH manifest instead: those are

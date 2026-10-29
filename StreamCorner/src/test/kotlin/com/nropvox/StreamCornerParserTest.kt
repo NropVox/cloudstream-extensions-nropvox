@@ -172,4 +172,14 @@ class StreamCornerParserTest {
         assertTrue(StreamCornerParser.bridgeHtml("/assets/BCJZAtsV.js").contains("""new Worker("/assets/BCJZAtsV.js", {type: 'module'"""))
         assertTrue(StreamCornerParser.playerHtml("https://e/x?p=a&b=\"c").contains("""src="https://e/x?p=a&amp;b=&quot;c""""))
     }
+
+    @Test fun decodedKeysMustBeContentKeys() {
+        val kid = "00112233445566778899aabbccddeeff"
+        val key = "ffeeddccbbaa99887766554433221100"
+        val json = """{"url":"https://media.example/cenc.mpd","keys":[{"kid":"$kid","key":"$key"}]}"""
+        assertEquals(SCClearKey(kid, key), StreamCornerParser.drmStream(json).keys.single())
+        assertTrue(runCatching { StreamCornerParser.drmStream(json.replace(key, "a".repeat(88))) }.isFailure)
+        assertTrue(runCatching { StreamCornerParser.drmStream(json.replace("https://media.example/cenc.mpd", "file:///cenc.mpd")) }.isFailure)
+        assertTrue(runCatching { StreamCornerParser.drmStream(json.replace("}]", "},{\"kid\":\"$kid\",\"key\":\"$key\"}]")) }.isFailure)
+    }
 }

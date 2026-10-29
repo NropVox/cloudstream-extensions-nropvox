@@ -1,5 +1,6 @@
 package com.nropvox
 
+import android.util.Base64
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageList
@@ -20,6 +21,8 @@ import com.lagradost.cloudstream3.newSearchResponseList
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.newDrmExtractorLink
+import com.lagradost.cloudstream3.utils.CLEARKEY_UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -31,13 +34,20 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.Request
+import okhttp3.Interceptor
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 /**
  * streamcorner.st is a React SPA whose schedules come from Cloudflare Workers (`data.*.workers.dev/corner?p=…`)
  * behind an encrypted request/reply that only the site's own worker speaks, so [StreamCornerBridge] runs that worker
- * in a WebView. Every stream is a third-party embed; the bridge frames it and catches the HLS playlist it loads.
+ * in a WebView. Amazon embeds carry ClearKey configuration; other embeds are framed to capture their playlist.
  */
 class StreamCorner internal constructor(private val bridgeFactory: (String) -> StreamCornerBridge) : MainAPI() {
     override var mainUrl = "https://streamcorner.st"
@@ -48,6 +58,7 @@ class StreamCorner internal constructor(private val bridgeFactory: (String) -> S
     override val supportedTypes = setOf(TvType.Live)
 
     private val bridge by lazy { bridgeFactory(mainUrl) }
+    private val drm by lazy { StreamCornerDrmResolver(bridge, mainUrl, ::fetchPlaylist) }
     private val bootstrapLock = Mutex()
     @Volatile private var bootstrap: Pair<SCBootstrap, Long>? = null
     private val lists = ConcurrentHashMap<String, Pair<List<SCItem>, Long>>()
@@ -130,34 +141,64 @@ class StreamCorner internal constructor(private val bridgeFactory: (String) -> S
                 async {
                     permits.withPermit {
                         try {
-                            val manifest = if (StreamCornerParser.isManifest(embed)) null else bridge.manifest(embed, EMBED_TIMEOUT_MS)
-                            val url = manifest?.url ?: embed.takeIf { StreamCornerParser.isManifest(it) }
+                            val decoded = if (drm.supports(embed)) try {
+                                drm.resolve(embed)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                Log.w(name, "$label decoder failed: ${e.javaClass.simpleName}")
+                                null
+                            } else null
+                            val manifest = if (decoded != null || StreamCornerParser.isManifest(embed)) null else bridge.manifest(embed, EMBED_TIMEOUT_MS)
+                            val url = decoded?.url ?: manifest?.url ?: embed.takeIf { StreamCornerParser.isManifest(it) }
                             if (url == null) {
                                 Log.w(name, "no playlist from $label $embed")
                                 return@withPermit false
                             }
                             val seen = manifest?.headers.orEmpty()
-                            Log.i(name, "$label -> $url $seen")
-                            val referer = seen.entries.firstOrNull { it.key.equals("Referer", true) }?.value.orEmpty()
+                            val embedOrigin = URI(embed).let { "${it.scheme}://${it.authority}" }
+                            val referer = if (decoded != null) "$embedOrigin/" else
+                                seen.entries.firstOrNull { it.key.equals("Referer", true) }?.value.orEmpty()
                             val headers = listOfNotNull(
-                                seen.entries.firstOrNull { it.key.equals("Origin", true) }?.let { "Origin" to it.value },
+                                if (decoded != null) "Origin" to embedOrigin else
+                                    seen.entries.firstOrNull { it.key.equals("Origin", true) }?.let { "Origin" to it.value },
                                 manifest?.userAgent?.let { "User-Agent" to it },
                             ).toMap()
-                            if (isDrm(url, headers + listOfNotNull(referer.ifEmpty { null }?.let { "Referer" to it }))) {
-                                Log.w(name, "skipping DRM-encrypted $label $url")
+                            val requestHeaders = headers + listOfNotNull(referer.ifEmpty { null }?.let { "Referer" to it })
+                            val key = decoded?.keys?.singleOrNull()
+                            if (decoded != null && decoded.keys.size > 1) {
+                                Log.w(name, "$label requires multiple DRM keys, unsupported by this app")
                                 return@withPermit false
                             }
-                            val link = newExtractorLink(name, "$name $label", url, ExtractorLinkType.M3U8) {
-                                this.referer = referer
-                                this.headers = headers
-                                StreamCornerParser.quality(label)?.let { quality = it }
+                            val link = if (key != null) {
+                                val playable = drmDash(url, requestHeaders, key.kid)
+                                newDrmExtractorLink(name, "$name $label", playable.url, ExtractorLinkType.DASH, CLEARKEY_UUID) {
+                                    kid = jwk(key.kid)
+                                    this.key = jwk(key.key)
+                                    this.referer = referer
+                                    this.headers = headers
+                                    extractorData = playable.manifest
+                                    quality = StreamCornerParser.quality(label) ?: playable.quality
+                                }
+                            } else {
+                                if (isDrm(url, requestHeaders)) {
+                                    Log.w(name, "skipping unresolved DRM: $label")
+                                    return@withPermit false
+                                }
+                                newExtractorLink(name, "$name $label", url,
+                                    if (StreamCornerParser.isDash(url)) ExtractorLinkType.DASH else ExtractorLinkType.M3U8) {
+                                    this.referer = referer
+                                    this.headers = headers
+                                    StreamCornerParser.quality(label)?.let { quality = it }
+                                }
                             }
+                            Log.i(name, "$label: ${link.type}, ClearKey=${key != null}")
                             callback(link)
                             true
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
-                            Log.w(name, "$label $embed: ${e.message}")
+                            Log.w(name, "$label: ${e.message}")
                             false
                         }
                     }
@@ -165,6 +206,46 @@ class StreamCorner internal constructor(private val bridgeFactory: (String) -> S
             }.awaitAll()
         }
         return found.any { it }
+    }
+
+    private fun jwk(hex: String): String = Base64.encodeToString(
+        hex.chunked(2).map { it.toInt(16).toByte() }.toByteArray(), Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+    )
+
+    /** Cloudstream's DRM branch uses DASH even for an HLS link. Repackage the observed NBA VOD layout. */
+    private data class DrmPlayback(val url: String, val quality: Int = 0, val manifest: String? = null)
+
+    private suspend fun drmDash(url: String, headers: Map<String, String>, kid: String): DrmPlayback = withContext(Dispatchers.IO) {
+        if (StreamCornerParser.isDash(url)) return@withContext DrmPlayback(url)
+        val uri = URI(url)
+        require(uri.host == "lpnba.akamaized.net" && uri.path.startsWith("/vod-pz/p/hls-wvpr/")) {
+            "DRM HLS format is not supported by this app"
+        }
+        val selection = StreamCornerDash.select(fetchPlaylist(url, headers), url) ?: error("Unsupported NBA master playlist")
+        val video = StreamCornerDash.media(fetchPlaylist(selection.videoUrl, headers), selection.videoUrl, kid)
+            ?: error("Unsupported NBA video playlist")
+        val audio = StreamCornerDash.media(fetchPlaylist(selection.audioUrl, headers), selection.audioUrl, kid)
+            ?: error("Unsupported NBA audio playlist")
+        fun scale(track: StreamCornerDash.Track): Int = track.initializations.map {
+            StreamCornerDash.timescale(fetchBytes(it, headers)) ?: error("Invalid media initialization")
+        }.distinct().singleOrNull() ?: error("Track timescale changed")
+        val videoScale = scale(video)
+        val audioScale = scale(audio)
+        val mpd = StreamCornerDash.mpd(selection, video, audio, kid, videoScale, audioScale) ?: error("NBA tracks do not align")
+        val synthetic = url.substringBefore('?').removeSuffix(".m3u8") + ".cs3.mpd" +
+            uri.rawQuery?.let { "?$it" }.orEmpty()
+        DrmPlayback(synthetic, selection.height, mpd)
+    }
+
+    override fun getVideoInterceptor(extractorLink: ExtractorLink): Interceptor? {
+        val mpd = extractorLink.extractorData?.takeIf { it.startsWith("<?xml") } ?: return null
+        val url = extractorLink.url.toHttpUrl()
+        return Interceptor { chain ->
+            val request = chain.request()
+            if (request.url != url) chain.proceed(request) else Response.Builder()
+                .request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                .body(mpd.toResponseBody("application/dash+xml".toMediaType())).build()
+        }
     }
 
     /**
@@ -186,10 +267,14 @@ class StreamCorner internal constructor(private val bridgeFactory: (String) -> S
     }
 
     private fun fetchPlaylist(url: String, headers: Map<String, String>): String {
+        return fetchBytes(url, headers).toString(Charsets.UTF_8)
+    }
+
+    private fun fetchBytes(url: String, headers: Map<String, String>): ByteArray {
         val request = Request.Builder().url(url).apply { headers.forEach { (k, v) -> header(k, v) } }.build()
         return probeClient.newCall(request).execute().use { res ->
             if (!res.isSuccessful) throw IllegalStateException("HTTP ${res.code}")
-            res.body.string()
+            res.body.bytes()
         }
     }
 

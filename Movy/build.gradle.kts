@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 cloudstream {
     authors = listOf("NropVox")
@@ -21,3 +21,6 @@ cloudstream {
 }
 
 // Cloudstream's inline JSON and key APIs use Java 11 bytecode.
+
+// movy's stream resolvers are shared with OmniStream.
+android.sourceSets.getByName("main").kotlin.srcDir("../shared/movysource")

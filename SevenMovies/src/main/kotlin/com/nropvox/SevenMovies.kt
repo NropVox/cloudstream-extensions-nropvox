@@ -28,20 +28,15 @@ import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newSearchResponseList
-import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
-import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.newExtractorLink
 import kotlinx.coroutines.CancellationException
-import java.net.URI
 import java.net.URLEncoder
-import java.util.Collections
 
+/** 7movies.ac: a TMDB-keyed catalog; playback is resolved by [SevenMoviesSource] in `shared/sevenmoviessource` (shared with OmniStream). */
 class SevenMovies : MainAPI() {
     override var mainUrl = "https://7movies.ac"
     override var name = "7Movies"
@@ -50,7 +45,6 @@ class SevenMovies : MainAPI() {
     override val hasQuickSearch = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
 
-    private val player = "https://embed.vidrift.net"
     private val titlePath = Regex("""/(movie|tv)/(\d+)""")
     private val browserHeaders = mapOf("User-Agent" to USER_AGENT)
 
@@ -179,82 +173,7 @@ class SevenMovies : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val link = tryParseJson<SevenLink>(data) ?: return false
-        if (link.type !in setOf("movie", "tv") || link.id <= 0 ||
-            (link.type == "tv" && (link.season == null || link.episode == null))) return false
-        val path = if (link.type == "tv") "tv/${link.id}/${link.season}/${link.episode}" else "movie/${link.id}"
-        val watchUrl = "$mainUrl/${link.type}/${link.id}/watch"
-        // Never persist grants or signed URLs in episode data: obtain them when playback starts.
-        val grant = safely("playback grant") {
-            app.post("$mainUrl/api/playback-token", headers = browserHeaders + mapOf(
-                "Origin" to mainUrl, "Referer" to watchUrl, "Content-Type" to "application/json"
-            ), json = SevenGrantRequest(link.id, link.type, link.season, link.episode), timeout = 30L)
-                .parsedSafe<SevenGrant>()
-        }?.token?.takeIf { it.isNotBlank() } ?: return false
-        val bootResponse = safely("player boot") {
-            app.get("$player/api/boot/$path?token=${encode(grant)}&shell=1", headers = browserHeaders + mapOf(
-                "x-embed-parent" to mainUrl, "Referer" to watchUrl
-            ), timeout = 30L)
-        } ?: return false
-        val boot = bootResponse.parsedSafe<SevenBoot>() ?: return false
-        val meta = boot.meta ?: return false
-        if (!meta.unreleased.isNullOrBlank()) return false
-        val token = meta.token?.takeIf { it.isNotBlank() } ?: grant
-        val cookie = bootResponse.cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
-        val playerHeaders = browserHeaders + mapOf("Referer" to "$player/") +
-            if (cookie.isBlank()) emptyMap() else mapOf("Cookie" to cookie)
-        val emitted = Collections.synchronizedSet(HashSet<String>())
-        val subtitles = Collections.synchronizedSet(HashSet<String>())
-
-        fun mediaHeaders(url: String): Map<String, String> =
-            if (URI(url).host == URI(player).host) playerHeaders else browserHeaders + mapOf("Referer" to "$player/")
-
-        suspend fun emitSubtitle(track: SevenSubtitle) {
-            val url = absolute(track.url) ?: return
-            if (subtitles.add(url)) subtitleCallback(newSubtitleFile(track.label ?: track.lang ?: "Unknown", url) {
-                headers = mediaHeaders(url)
-            })
-        }
-
-        suspend fun emit(stream: SevenStream, provider: String, quality: Int? = null) {
-            val url = absolute(stream.url?.takeIf { it.isNotBlank() } ?: stream.proxyUrl) ?: return
-            if (emitted.add(url)) {
-                val label = stream.name ?: provider.replaceFirstChar { it.uppercase() }
-                callback(newExtractorLink(name, "$name - $label", url,
-                    if (stream.type == "mp4") ExtractorLinkType.VIDEO else ExtractorLinkType.M3U8) {
-                    referer = "$player/"
-                    this.quality = stream.rungs.orEmpty().mapNotNull { it.height }.maxOrNull()
-                        ?: quality ?: Qualities.Unknown.value
-                    headers = mediaHeaders(url)
-                })
-                stream.subtitleListUrl?.let { list ->
-                    absolute(list)?.let { subtitleUrl ->
-                        get<SevenTracks>(subtitleUrl, playerHeaders)?.tracks.orEmpty().forEach { emitSubtitle(it) }
-                    }
-                }
-            }
-        }
-
-        boot.shell?.subtitles.orEmpty().forEach { emitSubtitle(it) }
-        listOf("evion" to meta.evionUrl, "vexon" to meta.vexonUrl, "selfhost" to meta.selfhostUrl)
-            .forEach { (provider, url) ->
-                if (!url.isNullOrBlank()) emit(SevenStream(url = url,
-                    type = if (provider == "selfhost") meta.selfhostKind else "hls"), provider)
-            }
-        meta.orionStreams.orEmpty().forEach { emit(it, "Orion") }
-        val providers = linkedSetOf("orion", "vela", "atlas", "titan", "lyra")
-        // Anime flags are either false or an array of available sub/dub providers.
-        meta.anime?.takeIf { it.isArray }?.forEach { providers.add(it.asText()) }
-        if (meta.anime?.isBoolean == true && meta.anime.asBoolean()) providers.addAll(listOf("anime", "animedub"))
-        providers.filter { it.matches(Regex("[a-z0-9-]{1,24}")) }.amap { provider ->
-            safely(provider) {
-                val source = get<SevenSources>("$player/api/source/$path?token=${encode(token)}" +
-                    "&provider=$provider&parent=${encode(meta.parent ?: URI(mainUrl).host)}&nofallback=1", playerHeaders)
-                    ?: return@safely
-                source.subtitles.orEmpty().forEach { emitSubtitle(it) }
-                source.streams.orEmpty().forEach { emit(it, source.provider ?: provider, source.maxRes) }
-            }
-        }
-        return emitted.isNotEmpty()
+        return SevenMoviesSource.load(link, name, subtitleCallback, callback)
     }
 
     private suspend inline fun <reified T : Any> get(url: String, headers: Map<String, String> = browserHeaders): T? =
@@ -268,10 +187,6 @@ class SevenMovies : MainAPI() {
         // Do not log exception messages: HTTP errors may contain playback tokens or signed URLs.
         Log.d(name, "$operation failed (${e.javaClass.simpleName})")
         null
-    }
-
-    private fun absolute(url: String?): String? = url?.takeIf { it.isNotBlank() }?.let {
-        runCatching { URI("$player/").resolve(it).takeIf { u -> u.scheme in setOf("http", "https") }?.toString() }.getOrNull()
     }
 
     private fun image(path: String?, size: String) = path?.let { "https://image.tmdb.org/t/p/$size$it" }

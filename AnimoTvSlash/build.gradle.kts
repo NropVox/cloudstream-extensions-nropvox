@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 cloudstream {
     authors = listOf("NropVox")
@@ -18,3 +18,6 @@ cloudstream {
 
     isCrossPlatform = true
 }
+
+// The AniList-keyed stream API is shared with OmniStream.
+android.sourceSets.getByName("main").kotlin.srcDir("../shared/animotvsource")

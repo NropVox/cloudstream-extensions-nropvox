@@ -1,6 +1,5 @@
 package com.nropvox
 
-import com.lagradost.api.Log
 import com.lagradost.cloudstream3.Actor
 import com.lagradost.cloudstream3.ActorData
 import com.lagradost.cloudstream3.ErrorLoadingException
@@ -22,30 +21,24 @@ import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.addDate
 import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.app
-import com.lagradost.cloudstream3.fixUrl
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newSearchResponseList
-import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
-import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.loadExtractor
-import com.lagradost.cloudstream3.utils.newExtractorLink
-import kotlinx.coroutines.delay
 import java.net.URLEncoder
 
 /**
  * Cno.to is a React SPA over a JSON API keyed by TMDB IDs; no auth, cookies or tokens are needed.
  * Titles in its own library come with first-party HLS sources; the rest only offer third-party embeds.
+ * Links are resolved by [CnoToSource] in `shared/cnotosource` (shared with OmniStream).
  */
 class CnoTo : MainAPI() {
     override var mainUrl = "https://cno.to"
@@ -144,7 +137,7 @@ class CnoTo : MainAPI() {
         val movie = fetch<Details>("movie/$id") ?: throw ErrorLoadingException("Could not load movie $id")
         val title = movie.title ?: return null
         val type = if (movie.isAnime()) TvType.AnimeMovie else TvType.Movie
-        return newMovieLoadResponse(title, "$mainUrl/movie/$id", type, LinkData("movie", id).toJson()) {
+        return newMovieLoadResponse(title, "$mainUrl/movie/$id", type, CnoLink("movie", id).toJson()) {
             applyDetails(movie)
             duration = movie.runtime
         }
@@ -161,7 +154,7 @@ class CnoTo : MainAPI() {
             .mapNotNull { info ->
                 val season = info.season ?: return@mapNotNull null
                 val episode = info.episode ?: return@mapNotNull null
-                newEpisode(LinkData("tv", id, season, episode).toJson()) {
+                newEpisode(CnoLink("tv", id, season, episode).toJson()) {
                     this.season = season
                     this.episode = episode
                     name = info.title
@@ -208,68 +201,7 @@ class CnoTo : MainAPI() {
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val link = parseJson<LinkData>(data)
-        val sources = if (link.type == "movie") {
-            fetch<Details>("movie/${link.id}")?.sources
-        } else {
-            fetch<EpisodeDetails>("tv/${link.id}/episode/${link.season}/${link.episode}")?.sources
-        }
-
-        var found = false
-        for (source in sources.orEmpty()) {
-            val url = source.url ?: continue
-            when (source.kind) {
-                "hls" -> {
-                    // Sealed playlists need a Turnstile pass and key unwrapping; Cno.to has this switched off.
-                    if (source.sealed == true) {
-                        Log.w(name, "Skipping sealed source ${source.id}")
-                        continue
-                    }
-                    val label = listOfNotNull(name, source.label, source.note).joinToString(" ")
-                    // The master playlist lists every resolution; the player offers them as qualities.
-                    callback(newExtractorLink(name, label, fixUrl(url), ExtractorLinkType.M3U8) {
-                        referer = "$mainUrl/"
-                        quality = Qualities.Unknown.value
-                        headers = browserHeaders
-                    })
-                    found = true
-                }
-                // cinesrc.st / vidfast.vc pages; only playable if an installed extractor handles them.
-                "embed" -> if (loadExtractor(url, "$mainUrl/", subtitleCallback, callback)) found = true
-            }
-        }
-
-        if (found) loadSubtitles(link.apiKey(), subtitleCallback)
-        return found
-    }
-
-    private suspend fun loadSubtitles(key: String, subtitleCallback: (SubtitleFile) -> Unit) {
-        var list = fetch<SubtitleList>("subs/list/$key")
-        // Cno.to gathers subtitles on demand for titles nobody has opened yet.
-        if (list?.files.isNullOrEmpty() && list?.pending != null) {
-            delay(SUBTITLE_RETRY_DELAY)
-            list = fetch<SubtitleList>("subs/list/$key")
-        }
-
-        // Popular titles list hundreds of files; keep the best-ranked few per language.
-        list?.files.orEmpty()
-            .filter { it.id != null }
-            .sortedByDescending { it.rank ?: 0.0 }
-            .groupBy { it.label ?: it.lang ?: "Unknown" }
-            .forEach { (label, files) ->
-                files.take(MAX_SUBTITLES_PER_LANGUAGE).forEachIndexed { index, file ->
-                    subtitleCallback(
-                        newSubtitleFile(
-                            if (index == 0) label else "$label ${index + 1}",
-                            "$api/subs/file/$key/${file.id}.vtt"
-                        ) {
-                            headers = browserHeaders
-                        }
-                    )
-                }
-            }
-    }
+    ): Boolean = CnoToSource.load(parseJson<CnoLink>(data), name, subtitleCallback, callback)
 
     private suspend inline fun <reified T> fetch(path: String): T? =
         tryParseJson<T>(app.get("$api/$path", headers = browserHeaders).text)
@@ -282,18 +214,6 @@ class CnoTo : MainAPI() {
 
     companion object {
         private const val ANIMATION_GENRE = 16
-        private const val MAX_SUBTITLES_PER_LANGUAGE = 3
-        private const val SUBTITLE_RETRY_DELAY = 3_000L
-    }
-
-    data class LinkData(
-        val type: String,
-        val id: Int,
-        val season: Int? = null,
-        val episode: Int? = null,
-    ) {
-        /** Path segment used by the subtitle and skip endpoints. */
-        fun apiKey() = if (type == "movie") "movie/$id" else "tv/$id/$season/$episode"
     }
 
     data class Card(
@@ -353,10 +273,7 @@ class CnoTo : MainAPI() {
         val trailer: Trailer? = null,
         val recommendations: List<Card>? = null,
         val seasonList: List<SeasonSummary>? = null,
-        val sources: List<Source>? = null,
     )
-
-    data class EpisodeDetails(val sources: List<Source>? = null)
 
     data class Season(val episodes: List<EpisodeInfo>? = null)
 
@@ -370,23 +287,5 @@ class CnoTo : MainAPI() {
         val date: String? = null,
         val rating: Double? = null,
         val playable: Boolean? = null,
-    )
-
-    data class Source(
-        val id: String? = null,
-        val kind: String? = null,
-        val url: String? = null,
-        val label: String? = null,
-        val note: String? = null,
-        val sealed: Boolean? = null,
-    )
-
-    data class SubtitleList(val files: List<SubtitleInfo>? = null, val pending: Any? = null)
-
-    data class SubtitleInfo(
-        val id: String? = null,
-        val lang: String? = null,
-        val label: String? = null,
-        val rank: Double? = null,
     )
 }

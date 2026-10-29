@@ -28,22 +28,3 @@ data class AapEpisode(
     @JsonProperty("t") val title: String? = null,
     @JsonProperty("i") val image: String? = null,
 )
-
-/** Response of `animotvslash.ru/api/stream/sources/<server>`: one resolved stream (media URLs go through `stream.animotvslash.ru`). */
-data class StreamSources(
-    @JsonProperty("server") val server: String? = null,
-    @JsonProperty("url") val url: String? = null,
-    @JsonProperty("type") val type: String? = null,
-    @JsonProperty("qualities") val qualities: List<StreamQuality>? = null,
-    @JsonProperty("subtitles") val subtitles: List<StreamSubtitle>? = null,
-)
-
-data class StreamQuality(
-    @JsonProperty("quality") val quality: String? = null,
-    @JsonProperty("url") val url: String? = null,
-)
-
-data class StreamSubtitle(
-    @JsonProperty("url") val url: String? = null,
-    @JsonProperty("label") val label: String? = null,
-)

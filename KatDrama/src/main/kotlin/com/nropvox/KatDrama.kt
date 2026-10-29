@@ -24,27 +24,19 @@ import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newSearchResponseList
-import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
-import com.lagradost.cloudstream3.runAllAsync
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
-import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.getQualityFromName
-import com.lagradost.cloudstream3.utils.loadExtractor
-import com.lagradost.cloudstream3.utils.newExtractorLink
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.withTimeoutOrNull
 import java.net.URLEncoder
 
 /**
  * k-drama.in ("KatDrama") is a PHP skin over TMDB: lists and title pages are server-rendered HTML keyed by TMDB id,
- * search is a TMDB `search/multi` proxy, and streams come from the site's own resolvers `2.php` (devcorp HLS),
- * `vid2.php` (KissKH / Castle HLS, series only) and `yoy5.php` (asianctv → vidbasic mirror embeds).
+ * search is a TMDB `search/multi` proxy, and streams come from the site's own resolvers, run by [KatDramaSource]
+ * in `shared/katdramasource` (shared with OmniStream).
  */
 class KatDrama : MainAPI() {
     override var mainUrl = "https://k-drama.in"
@@ -127,7 +119,7 @@ class KatDrama : MainAPI() {
         }
 
         if (type == "movie") {
-            val data = LinkData(id, "movie", 1, 1, first.title, first.year).toJson()
+            val data = KatLink(id, "movie", 1, 1, first.title, first.year).toJson()
             return newMovieLoadResponse(first.title, pageUrl, TvType.Movie, data) { fill() }
         }
 
@@ -143,7 +135,7 @@ class KatDrama : MainAPI() {
             }
         }
         val episodes = seasons.flatten().map { episode ->
-            newEpisode(LinkData(id, "tv", episode.season, episode.number, first.title, first.year).toJson()) {
+            newEpisode(KatLink(id, "tv", episode.season, episode.number, first.title, first.year).toJson()) {
                 name = episode.name
                 season = episode.season
                 this.episode = episode.number
@@ -159,83 +151,7 @@ class KatDrama : MainAPI() {
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val link = parseJson<LinkData>(data)
-        var found = false
-        val emit: (ExtractorLink) -> Unit = { found = true; callback(it) }
-        runAllAsync(
-            { devcorp(link, subtitleCallback, emit) },
-            { if (link.type == "tv") kisskh(link, subtitleCallback, emit) },
-            // The player waits for loadLinks to return; dead mirror hosts would hold it for 30 s or more.
-            { withTimeoutOrNull(MIRROR_BUDGET_MS) { vidbasic(link, subtitleCallback, emit) } },
-        )
-        return found
-    }
-
-    /** Server 2: one HLS master (480p/720p, fMP4 segments named `.png`) and up to ~38 VTT tracks. */
-    private suspend fun devcorp(link: LinkData, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {
-        val resolved = KatDramaParser.server2(app.get("$mainUrl/2.php/${link.id}/${link.season}/${link.episode}", timeout = TIMEOUT_S).document)
-            ?: return
-        if (!KatDramaParser.titleMatches(link.title, link.year, resolved.title, resolved.year)) {
-            Log.d(name, "Server 2 matched \"${resolved.title}\" (${resolved.year}), not \"${link.title}\"; skipped")
-            return
-        }
-        resolved.urls.forEach { url ->
-            callback(newExtractorLink(name, "$name Devcorp", url, ExtractorLinkType.M3U8) { quality = Qualities.Unknown.value })
-        }
-        resolved.subtitles.forEach { (label, url) -> subtitleCallback(newSubtitleFile(label, url)) }
-    }
-
-    /** Server 6: KissKH (and Castle) playlists for series; titles come from the TMDB id, so no name check. */
-    private suspend fun kisskh(link: LinkData, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {
-        val html = app.get("$mainUrl/vid2.php/${link.id}/${link.season}/${link.episode}", timeout = TIMEOUT_S).text
-        val (sources, subtitles) = KatDramaParser.server6(html)
-        sources.forEach { source ->
-            // Castle segments are TS named `.jpg`, so the playlist goes to the player as-is.
-            callback(newExtractorLink(name, "$name ${source.provider}", source.url, ExtractorLinkType.M3U8) {
-                quality = source.quality?.let { getQualityFromName(it) } ?: Qualities.Unknown.value
-            })
-        }
-        subtitles.forEach { (label, url) -> subtitleCallback(newSubtitleFile(label, url)) }
-    }
-
-    /** Server 7: asianctv episode → vidbasic page → dood / hglink / mixdrop / streamtape mirrors (often dead or slow). */
-    private suspend fun vidbasic(link: LinkData, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {
-        val json = app.get("$mainUrl/yoy5.php?id=${link.id}&s=${link.season}&e=${link.episode}&ajax=1", timeout = TIMEOUT_S).text
-        val resolved = KatDramaParser.server7(json) ?: return
-        if (!KatDramaParser.titleMatches(link.title, link.year, resolved.title, resolved.year)) {
-            Log.d(name, "Server 7 matched \"${resolved.title}\" (${resolved.year}), not \"${link.title}\"; skipped")
-            return
-        }
-        resolved.urls.amap { page ->
-            val mirrors = try {
-                KatDramaParser.mirrors(app.get(page, referer = "$mainUrl/", timeout = TIMEOUT_S).text)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(name, "vidbasic $page failed: ${e.message}")
-                emptyList()
-            }
-            mirrors.amap { mirror ->
-                try {
-                    loadExtractor(mirror, page, subtitleCallback, callback)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w(name, "Mirror $mirror failed: ${e.message}")
-                }
-            }
-        }
-    }
-
-    data class LinkData(
-        @JsonProperty("id") val id: Int,
-        @JsonProperty("type") val type: String,
-        @JsonProperty("s") val season: Int,
-        @JsonProperty("e") val episode: Int,
-        @JsonProperty("title") val title: String,
-        @JsonProperty("year") val year: Int? = null,
-    )
+    ): Boolean = KatDramaSource.load(parseJson<KatLink>(data), name, subtitleCallback, callback)
 
     data class SearchResults(@JsonProperty("results") val results: List<SearchResult>? = null)
 
@@ -251,7 +167,5 @@ class KatDrama : MainAPI() {
 
     private companion object {
         const val TMDB_IMAGE = "https://image.tmdb.org/t/p"
-        const val TIMEOUT_S = 30L
-        const val MIRROR_BUDGET_MS = 15_000L
     }
 }

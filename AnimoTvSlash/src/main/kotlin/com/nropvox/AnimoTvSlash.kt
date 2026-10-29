@@ -192,14 +192,17 @@ class AnimoTvSlash : MainAPI() {
         }
 
         // Older episodes only have AniList-keyed servers (`HD0`..`HD4`); `HD0` is the site's own player,
-        // whose API hands back ready-to-play streams from several providers.
+        // whose API ([AnimoStreamSource], shared with OmniStream) hands back ready-to-play streams from several providers.
         coroutineScope {
             options.mapNotNull { option -> AnimoTvSlashParser.watchEmbed(option.src)?.let { option to it } }
-                .flatMap { (option, embed) -> STREAM_SERVERS.map { server -> Triple(option, embed, server) } }
+                .flatMap { (option, embed) -> AnimoStreamSource.SERVERS.map { server -> Triple(option, embed, server) } }
                 .map { (option, embed, server) ->
                     async {
                         withTimeoutOrNull(STREAM_TIMEOUT_MS) {
-                            runCatching { emitStreamServer(option.lang, embed, server, emitted, subtitles, subtitleCallback, callback) }
+                            runCatching {
+                                AnimoStreamSource.emitServer(name, option.lang, embed.anilistId, embed.episode, embed.lang, server,
+                                    emitted, subtitles, subtitleCallback, callback)
+                            }
                                 .onSuccess { if (it) found = true }
                                 .onFailure { Log.w(name, "Stream $server ${embed.anilistId}/${embed.episode}: $it") }
                         }
@@ -239,50 +242,6 @@ class AnimoTvSlash : MainAPI() {
     /** The `HD0` API already resolves these; the other `HD` embeds are encrypted or SPA pages no extractor reads. */
     private fun AnimoTvSlashParser.ServerOption.isHandledElsewhere(): Boolean =
         UNSUPPORTED_HOSTS.any { it in src }
-
-    /** One provider of `animotvslash.ru/api/stream/sources/<server>`; false when it has nothing for this episode. */
-    private suspend fun emitStreamServer(
-        lang: String,
-        embed: AnimoTvSlashParser.WatchEmbed,
-        server: String,
-        emitted: MutableSet<String>,
-        subtitles: MutableSet<String>,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val url = "$STREAM_API/sources/$server?anilistId=${embed.anilistId}&episode=${embed.episode}&lang=${embed.lang}"
-        val res = app.get(url, headers = browserHeaders + mapOf("Referer" to STREAM_REFERER)).text
-        val source = tryParseJson<StreamSources>(res) ?: return false
-        val label = "$name $lang ${source.server ?: server}"
-        var emittedAny = false
-        if (source.type == "mp4") {
-            val files = source.qualities.orEmpty().mapNotNull { q -> q.url?.let { it to AnimoTvSlashParser.qualityHeight(q.quality) } }
-                .ifEmpty { listOfNotNull(source.url?.let { it to null }) }
-            for ((file, height) in files) {
-                if (emitStream("$label${height?.let { " ${it}p" }.orEmpty()}", file, ExtractorLinkType.VIDEO, height, emitted, callback)) emittedAny = true
-            }
-        } else {
-            val file = source.url ?: return false
-            emittedAny = emitStream(label, file, ExtractorLinkType.M3U8, null, emitted, callback)
-        }
-        source.subtitles.orEmpty().forEach { s ->
-            val subUrl = s.url ?: return@forEach
-            if (subtitles.add(subUrl)) {
-                subtitleCallback(newSubtitleFile(s.label ?: "Subtitles", subUrl) { headers = mapOf("Referer" to STREAM_REFERER) })
-            }
-        }
-        return emittedAny
-    }
-
-    private suspend fun emitStream(label: String, url: String, type: ExtractorLinkType, height: Int?, emitted: MutableSet<String>, callback: (ExtractorLink) -> Unit): Boolean {
-        if (!emitted.add(url)) return false
-        // The master carries separate audio renditions, so it is handed to the player whole rather than split by resolution.
-        callback(newExtractorLink(name, label, url, type) {
-            quality = height ?: Qualities.Unknown.value
-            referer = STREAM_REFERER
-        })
-        return true
-    }
 
     /** Splits an HLS master into one link per rendition; a master that can't be read is offered as-is. */
     private suspend fun emitHls(label: String, url: String, emitted: MutableSet<String>, callback: (ExtractorLink) -> Unit): Boolean {
@@ -341,13 +300,6 @@ class AnimoTvSlash : MainAPI() {
         private const val EMBED_TIMEOUT_MS = 20_000L
         private const val STREAM_TIMEOUT_MS = 25_000L
         private const val PLAYER_REFERER = "https://player.animotv.ru/"
-
-        /** `stream.animotvslash.ru` and the API both answer 403 unless the Referer is the player's own site. */
-        private const val STREAM_REFERER = "https://animotvslash.ru/"
-        private const val STREAM_API = "https://animotvslash.ru/api/stream"
-
-        /** Providers that returned plain HLS/MP4 in recon; the others (kaa, xanime, mmani) failed. */
-        private val STREAM_SERVERS = listOf("koto", "animo-ss", "miku", "aniwaves", "beep")
         private val UNSUPPORTED_HOSTS = listOf("animotvslash.ru/watch", "tryembed.us.cc", "vidnest.fun", "megaplay.buzz")
     }
 }

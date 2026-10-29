@@ -54,7 +54,7 @@ private suspend fun ExtractorApi.emitPackedM3u8(
     }
 }
 
-class Vidara : ExtractorApi() {
+open class Vidara : ExtractorApi() {
     override val name = "Vidara"
     override val mainUrl = "https://vidara.so"
     override val requiresReferer = false
@@ -573,6 +573,81 @@ class HLSProxy(
             referer = referer ?: mainUrl
         ).forEach(
             callback
+        )
+    }
+}
+
+/**
+ * SupJav's FST server. Of the packed player's links only the relative `/stream/…/master.m3u8` (hls4) answers;
+ * its segments are TikTok CDN "PNG" files, so the master goes straight to the player instead of generateM3u8.
+ */
+class Fc2Stream : ExtractorApi() {
+    override val name = "FC2Stream"
+    override val mainUrl = "https://fc2stream.tv"
+    override val requiresReferer = false
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val page = app.get(url, referer = referer)
+        val streamUrl = m3u8OrMasterRegex.findAll(getAndUnpack(page.text))
+            .map { URI(page.url).resolve(it.groupValues[1]).toString() }
+            .firstOrNull { it.contains("/stream/") && it.substringBefore('?').endsWith(".m3u8") } ?: return
+        callback(newExtractorLink(name, name, streamUrl, ExtractorLinkType.M3U8) {
+            this.referer = "$mainUrl/"
+            this.quality = Qualities.Unknown.value
+        })
+    }
+}
+
+/** SupJav's VAS server: a Vidara player. Without device/codecs hints the API answers with the h265 rendition. */
+class Vvaassjjav : Vidara() {
+    override val mainUrl = "https://vvaassjjav.xyz"
+}
+
+/** SupJav's EVS server (EarnVids). Its signed hls2 master plays; the hls3 master.txt host blocks. */
+class Evsishere : ExtractorApi() {
+    override val name = "EarnVids"
+    override val mainUrl = "https://evsishere.xyz"
+    override val requiresReferer = false
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        emitPackedM3u8(
+            source = name,
+            text = app.get(url, referer = referer).text,
+            referer = "$mainUrl/",
+            keep = { it.substringBefore('?').endsWith(".m3u8") },
+            callback = callback,
+        )
+    }
+}
+
+/** SupJav's LUC server: a LuluStream player whose packed jwplayer setup holds a signed master. */
+class Luminscdn : ExtractorApi() {
+    override val name = "LuluStream"
+    override val mainUrl = "https://luminscdn.xyz"
+    override val requiresReferer = false
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        emitPackedM3u8(
+            source = name,
+            text = app.get(url, referer = referer).text,
+            referer = "$mainUrl/",
+            keep = { it.substringBefore('?').endsWith(".m3u8") },
+            callback = callback,
         )
     }
 }

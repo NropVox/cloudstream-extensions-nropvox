@@ -171,7 +171,7 @@ class TonkaCine : MainAPI() {
         val link = tryParseJson<TonkaLink>(data) ?: return false
         if (link.id <= 0 || link.type !in setOf("movie", "tv") ||
             (link.type == "tv" && ((link.season ?: 0) < 1 || (link.episode ?: 0) < 1))) return false
-        return TonkaCineResolver.resolve(link, mainUrl, subtitleCallback, callback)
+        return TonkaCineResolver.resolve(link, mainUrl, name, subtitleCallback, callback)
     }
 
     private suspend inline fun <reified T : Any> get(url: String): T =

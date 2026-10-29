@@ -20,17 +20,25 @@ import java.security.SecureRandom
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
 
+/**
+ * TonkaCine's public players (Vidrock, Vidnest, Vidlove and extractor-backed embeds), keyed by TMDB id.
+ * Shared by the TonkaCine and OmniStream plugins; [resolve]'s name labels the links and log lines.
+ */
 internal object TonkaCineResolver {
+    const val SITE = "https://multi.tonkacine.watch"
+
     suspend fun resolve(
         link: TonkaLink,
         site: String,
+        name: String,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
-    ): Boolean = Session(link, site, subtitleCallback, callback).resolve()
+    ): Boolean = Session(link, site, name, subtitleCallback, callback).resolve()
 
     private class Session(
         val link: TonkaLink,
         val site: String,
+        val name: String,
         val subtitleCallback: (SubtitleFile) -> Unit,
         val callback: (ExtractorLink) -> Unit,
     ) {
@@ -151,7 +159,7 @@ internal object TonkaCineResolver {
 
         suspend fun emit(url: String?, label: String, type: String?, headers: Map<String, String>, height: Int? = null) {
             if (!isHttp(url) || !emitted.add(url!!)) return
-            callback(newExtractorLink("TonkaCine", "TonkaCine - $label", url,
+            callback(newExtractorLink(name, "$name - $label", url,
                 if (type == "mp4" || URI(url).path.endsWith(".mp4", true)) ExtractorLinkType.VIDEO else ExtractorLinkType.M3U8) {
                 referer = headers.entries.firstOrNull { it.key.equals("Referer", true) }?.value.orEmpty()
                 this.headers = headers
@@ -179,7 +187,7 @@ internal object TonkaCineResolver {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.w("TonkaCine", "$label: ${e.javaClass.simpleName}")
+                Log.w(name, "$label: ${e.javaClass.simpleName}")
             }
         }
     }

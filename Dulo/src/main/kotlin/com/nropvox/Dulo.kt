@@ -1,6 +1,5 @@
 package com.nropvox
 
-import com.lagradost.api.Log
 import com.lagradost.cloudstream3.Actor
 import com.lagradost.cloudstream3.ActorData
 import com.lagradost.cloudstream3.HomePageList
@@ -27,26 +26,16 @@ import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newSearchResponseList
-import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
-import com.lagradost.cloudstream3.runAllAsync
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
-import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.newExtractorLink
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeoutOrNull
 import java.net.URLEncoder
 
 /**
- * dulo.mov: a SvelteKit skin over TMDB (called from the browser with the key baked into its bundle) whose
- * streams come from its own Workers: ZCDN ("Pickle", HLS up to 4K, no headers) and `/api/streams/resolve`,
- * which polls third-party servers and serves them through a Referer-checked proxy.
+ * dulo.mov: a SvelteKit skin over TMDB (called from the browser with the key baked into its bundle). Its streams
+ * are resolved by [DuloSource] in `shared/dulosource`, which OmniStream compiles in too.
  */
 class Dulo : MainAPI() {
     override var mainUrl = "https://dulo.mov"
@@ -57,10 +46,6 @@ class Dulo : MainAPI() {
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.Anime)
 
     private val tmdbApi = "https://api.themoviedb.org/3"
-
-    // The zstream-proxy URLs of resolver sources and their captions 403 without the site as Referer or Origin.
-    private val siteHeaders
-        get() = mapOf("Origin" to mainUrl, "Referer" to "$mainUrl/")
 
     override val mainPage = mainPageOf(
         "trending/all/week" to "Trending this week",
@@ -204,139 +189,7 @@ class Dulo : MainAPI() {
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val link = parseJson<DuloLink>(data)
-        var found = false
-        runAllAsync(
-            { loadSubtitles(link, subtitleCallback) },
-            { if (loadZcdn(link, callback)) found = true },
-            // The player waits for the slowest task, so the resolver's polling is capped.
-            { withTimeoutOrNull(RESOLVE_BUDGET_MS) { if (loadResolved(link, subtitleCallback, callback)) found = true } },
-        )
-        return found
-    }
-
-    /** Pickle: one `/cdn` lookup on a random ZCDN copy, then the master playlist for its top quality. */
-    private suspend fun loadZcdn(link: DuloLink, callback: (ExtractorLink) -> Unit): Boolean {
-        val domain = workerDomain()
-        val hosts = (1..3).shuffled()
-        for (host in hosts.take(2)) {
-            try {
-                val answer = app.get(DuloParser.zcdnUrl(domain, host, link), timeout = 15L).text
-                val playUrl = DuloParser.zcdnPlayUrl(answer, domain)
-                    ?: return false.also { Log.d(name, "Pickle: no stream (${answer.take(80)})") }
-                val master = app.get(playUrl, timeout = 15L)
-                if (!master.isSuccessful || !master.text.trimStart().startsWith("#EXTM3U")) {
-                    Log.w(name, "Pickle: master HTTP ${master.code}")
-                    return false
-                }
-                callback(newExtractorLink("$name Pickle", "$name Pickle", playUrl, ExtractorLinkType.M3U8) {
-                    quality = DuloParser.topHeight(master.text) ?: Qualities.Unknown.value
-                })
-                return true
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(name, "Pickle zcdn$host: ${e.message}")
-            }
-        }
-        return false
-    }
-
-    /**
-     * Extra servers: `/api/streams/resolve` answers `pending` until its backend has asked every server, and
-     * (with `progressive=true`) already lists the servers found so far, so each poll emits the new ones.
-     */
-    private suspend fun loadResolved(
-        link: DuloLink,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val url = "$mainUrl/api/streams/resolve?${DuloParser.resolveQuery(link)}"
-        // Every poll mints new proxy tokens for the same servers, so they are told apart by label like on the site.
-        val emitted = HashSet<String>()
-        while (true) {
-            val response = try {
-                app.get(url, timeout = 30L)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(name, "Resolve: ${e.message}")
-                break
-            }
-            if (response.code == 429 || response.code == 503) {
-                delay(2_000)
-                continue
-            }
-            val answer = DuloParser.resolveAnswer(response.text) ?: break
-            answer.sources.filter { it.url != null && emitted.add(it.label ?: it.url) }
-                .forEach { emitResolved(it, subtitleCallback, callback) }
-            if (!answer.pending) break
-            delay(1_500)
-        }
-        return emitted.isNotEmpty()
-    }
-
-    private suspend fun emitResolved(
-        source: ResolveSource,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ) {
-        val sourceUrl = source.url ?: return
-        val (server, height) = DuloParser.splitLabel(source.label ?: "Server")
-        source.captions.forEach { caption ->
-            val captionUrl = caption.url ?: return@forEach
-            subtitleCallback(newSubtitleFile("${caption.display ?: caption.language ?: "Unknown"} ($server)", captionUrl) {
-                headers = siteHeaders
-            })
-        }
-        val type = when (source.type) {
-            "mp4", "mkv", "webm" -> ExtractorLinkType.VIDEO
-            else -> ExtractorLinkType.M3U8
-        }
-        // The player appends the quality itself, so the name stops at the server.
-        callback(newExtractorLink("$name $server", "$name $server", sourceUrl, type) {
-            referer = "$mainUrl/"
-            quality = height ?: Qualities.Unknown.value
-            headers = siteHeaders
-        })
-    }
-
-    private suspend fun loadSubtitles(link: DuloLink, subtitleCallback: (SubtitleFile) -> Unit) {
-        val params = listOfNotNull(
-            "id=${link.id}",
-            link.imdbId?.let { "imdb=$it" },
-            link.season?.let { "season=$it" },
-            link.episode?.let { "episode=$it" },
-        ).joinToString("&")
-        val json = try {
-            app.get("$mainUrl/api/subtitles/search?$params", timeout = 20L).text
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(name, "Subtitles: ${e.message}")
-            return
-        }
-        DuloParser.subtitles(json).forEach { subtitle ->
-            val label = (subtitle.display ?: subtitle.language ?: "Unknown") + if (subtitle.hearingImpaired) " (SDH)" else ""
-            subtitleCallback(newSubtitleFile(label, subtitle.url!!))
-        }
-    }
-
-    /** The Workers' domain from the site's runtime config, read once per session. */
-    private suspend fun workerDomain(): String = domainLock.withLock {
-        cachedDomain ?: run {
-            val domain = try {
-                DuloParser.workerDomain(app.get("$mainUrl/dulo-config.js", timeout = 10L).text)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(name, "Config: ${e.message}")
-                null
-            }
-            (domain ?: DuloParser.DEFAULT_WORKER_DOMAIN).also { cachedDomain = it }
-        }
-    }
+    ): Boolean = DuloSource.load(parseJson<DuloLink>(data), name, subtitleCallback, callback)
 
     private fun image(path: String?, size: String): String? =
         path?.let { "https://image.tmdb.org/t/p/$size$it" }
@@ -344,9 +197,5 @@ class Dulo : MainAPI() {
     companion object {
         /** dulo.mov's own TMDB key, from its JS bundle (the site calls TMDB from the browser with it). */
         private const val TMDB_KEY = "1865f43a0549ca50d341dd9ab8b29f49"
-        private const val RESOLVE_BUDGET_MS = 10_000L
-
-        private val domainLock = Mutex()
-        private var cachedDomain: String? = null
     }
 }

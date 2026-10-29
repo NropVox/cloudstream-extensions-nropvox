@@ -2,13 +2,6 @@ package com.nropvox
 
 import com.fasterxml.jackson.annotation.JsonProperty
 
-internal data class TonkaLink(
-    @JsonProperty("id") val id: Int,
-    @JsonProperty("type") val type: String,
-    @JsonProperty("season") val season: Int? = null,
-    @JsonProperty("episode") val episode: Int? = null,
-)
-
 internal data class TonkaPage(
     @JsonProperty("results") val results: List<TonkaItem>? = null,
     @JsonProperty("total_pages") val totalPages: Int? = null,

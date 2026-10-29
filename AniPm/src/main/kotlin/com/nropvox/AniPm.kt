@@ -1,6 +1,5 @@
 package com.nropvox
 
-import com.lagradost.api.Log
 import com.lagradost.cloudstream3.DubStatus
 import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageResponse
@@ -27,20 +26,17 @@ import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newSearchResponseList
-import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
-import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.newExtractorLink
 import java.net.URLEncoder
 
 /**
  * ani.pm is a Vite SPA over a JSON API (`/api/anime/...`) that mixes two backends: its own
  * "settlar" library and AniList-keyed titles. Both play through the same chain:
- * playback-bootstrap → settlar session → embed.settlar.io session → plain HLS on media.settlar.io.
+ * playback-bootstrap → settlar session → embed.settlar.io session → plain HLS on media.settlar.io, run by
+ * [AniPmSource] in `shared/anipmsource` (shared with OmniStream).
  */
 class AniPm : MainAPI() {
     override var mainUrl = "https://ani.pm"
@@ -50,7 +46,6 @@ class AniPm : MainAPI() {
     override val supportedTypes = setOf(TvType.Anime, TvType.AnimeMovie, TvType.OVA)
 
     private val api get() = "$mainUrl/api"
-    private val embedHost = "https://embed.settlar.io"
 
     // Every ani.pm and settlar host, covers and segments included, answers 403 to non-browser user agents.
     private val browserHeaders = mapOf("User-Agent" to USER_AGENT)
@@ -164,47 +159,7 @@ class AniPm : MainAPI() {
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val link = parseJson<ApLinkData>(data)
-        val bootstrap = fetch<ApBootstrap>(AniPmParser.bootstrapPath(link))
-        val selection = bootstrap?.settlarSelection ?: run {
-            Log.w(name, "No playback for ${link.source}/${link.id} ep ${link.ep}")
-            return false
-        }
-        // The session must be asked for the audio the bootstrap settled on, not the one requested.
-        val channel = bootstrap.effectiveLanguage ?: link.lang
-        val query = listOf(
-            "selection" to selection,
-            "provider" to "anipm",
-            "ep" to link.ep.toString(),
-            "channel" to channel,
-            "telemetry" to "0",
-        ).joinToString("&") { (key, value) -> "$key=${URLEncoder.encode(value, "UTF-8")}" }
-        val embedUrl = fetch<ApSettlarSession>("anime/settlar/session?$query")?.embedUrl ?: return false
-        val token = AniPmParser.embedToken(embedUrl) ?: return false
-        val session = tryParseJson<ApEmbedSession>(
-            app.get("$embedHost/api/embed/session?t=$token", headers = browserHeaders).text
-        )
-        val source = session?.source?.takeIf { session.kind == "hls" } ?: run {
-            Log.w(name, "Embed session gave no HLS for ${link.source}/${link.id} ep ${link.ep}")
-            return false
-        }
-
-        // The master lists every resolution; the player offers them as qualities.
-        callback(
-            newExtractorLink(name, "$name ${AniPmParser.linkLabel(link.lang, channel)}", source, ExtractorLinkType.M3U8) {
-                quality = Qualities.Unknown.value
-                headers = browserHeaders
-            }
-        )
-        session.subtitles.orEmpty().forEach { track ->
-            val url = track.url ?: return@forEach
-            subtitleCallback(newSubtitleFile(track.label ?: track.srclang ?: "Unknown", url) {
-                headers = browserHeaders
-            })
-        }
-        return true
-    }
+    ): Boolean = AniPmSource.load(parseJson<ApLinkData>(data), name, subtitleCallback, callback)
 
     private fun tvType(type: String?) = when {
         AniPmParser.isMovie(type) -> TvType.AnimeMovie

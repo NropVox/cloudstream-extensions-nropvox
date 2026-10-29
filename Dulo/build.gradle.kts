@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 cloudstream {
     authors = listOf("NropVox")
@@ -19,3 +19,6 @@ cloudstream {
 
     isCrossPlatform = true
 }
+
+// dulo.mov's stream resolvers are shared with OmniStream.
+android.sourceSets.getByName("main").kotlin.srcDir("../shared/dulosource")

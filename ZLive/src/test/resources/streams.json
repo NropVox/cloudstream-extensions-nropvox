@@ -1,0 +1,470 @@
+[
+ {
+  "id": "auto-evt-10-28-26-millbridge-speedway",
+  "name": "10.28.26 | Millbridge Speedway",
+  "type": "Motorsport",
+  "thumbnail": "https://dirtvision.asset.viewlift.com/images/2026/01/16/10-28-26_Millbridge-1768580749672.png?impolicy=resize&amp;w=1920&amp;h=1080",
+  "startTime": "2026-10-28T18:15:00Z",
+  "live": true,
+  "order": 1013,
+  "source": {
+   "key": "auto-evt-10-28-26-millbridge-speedway",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-miami-heat-v-atlanta-hawks-401909881",
+  "name": "Miami Heat @ Atlanta Hawks",
+  "type": "Basketball",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nba-401909881.png",
+  "startTime": "2026-10-28T19:00:00Z",
+  "live": true,
+  "order": 1017,
+  "source": {
+   "key": "auto-evt-miami-heat-v-atlanta-hawks-401909881",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-washington-wizards-v-cleveland-cavaliers-401909882",
+  "name": "Washington Wizards @ Cleveland Cavaliers",
+  "type": "Basketball",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nba-401909882.png",
+  "startTime": "2026-10-28T19:00:00Z",
+  "live": true,
+  "order": 1018,
+  "source": {
+   "key": "auto-evt-washington-wizards-v-cleveland-cavaliers-401909882",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-charlotte-hornets-v-detroit-pistons-401909883",
+  "name": "Charlotte Hornets @ Detroit Pistons",
+  "type": "Basketball",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nba-401909883.png",
+  "startTime": "2026-10-28T19:00:00Z",
+  "live": true,
+  "order": 1019,
+  "source": {
+   "key": "auto-evt-charlotte-hornets-v-detroit-pistons-401909883",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-philadelphia-76ers-v-indiana-pacers-401909884",
+  "name": "Philadelphia 76ers @ Indiana Pacers",
+  "type": "Basketball",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nba-401909884.png",
+  "startTime": "2026-10-28T19:00:00Z",
+  "live": true,
+  "order": 1020,
+  "source": {
+   "key": "auto-evt-philadelphia-76ers-v-indiana-pacers-401909884",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-kennesaw-state-owls-v-middle-tennessee-blue-raiders-401871058",
+  "name": "Kennesaw State Owls @ Middle Tennessee Blue Raiders",
+  "type": "American Football",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/cfb-401871058.png",
+  "startTime": "2026-10-28T19:00:00Z",
+  "live": true,
+  "order": 1021,
+  "source": {
+   "key": "auto-evt-kennesaw-state-owls-v-middle-tennessee-blue-raiders-401871058",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-orlando-magic-v-toronto-raptors-401909885",
+  "name": "Orlando Magic @ Toronto Raptors",
+  "type": "Basketball",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nba-401909885.png",
+  "startTime": "2026-10-28T19:30:00Z",
+  "live": true,
+  "order": 1022,
+  "source": {
+   "key": "auto-evt-orlando-magic-v-toronto-raptors-401909885",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-cf-montreal-v-charlotte-fc-761907",
+  "name": "CF Montr\u00e9al @ Charlotte FC",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mls-761907.png",
+  "startTime": "2026-10-28T19:30:00Z",
+  "live": true,
+  "order": 1023,
+  "source": {
+   "key": "auto-evt-cf-montreal-v-charlotte-fc-761907",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-fc-cincinnati-v-inter-miami-cf-761908",
+  "name": "FC Cincinnati @ Inter Miami CF",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mls-761908.png",
+  "startTime": "2026-10-28T19:30:00Z",
+  "live": true,
+  "order": 1024,
+  "source": {
+   "key": "auto-evt-fc-cincinnati-v-inter-miami-cf-761908",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-red-bull-new-york-v-new-england-revolution-761909",
+  "name": "Red Bull New York @ New England Revolution",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mls-761909.png",
+  "startTime": "2026-10-28T19:30:00Z",
+  "live": true,
+  "order": 1025,
+  "source": {
+   "key": "auto-evt-red-bull-new-york-v-new-england-revolution-761909",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-atlanta-united-fc-v-new-york-city-fc-761905",
+  "name": "Atlanta United FC @ New York City FC",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mls-761905.png",
+  "startTime": "2026-10-28T19:30:00Z",
+  "live": true,
+  "order": 1026,
+  "source": {
+   "key": "auto-evt-atlanta-united-fc-v-new-york-city-fc-761905",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-d-c-united-v-toronto-fc-761906",
+  "name": "D.C. United @ Toronto FC",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mls-761906.png",
+  "startTime": "2026-10-28T19:30:00Z",
+  "live": true,
+  "order": 1027,
+  "source": {
+   "key": "auto-evt-d-c-united-v-toronto-fc-761906",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-philadelphia-flyers-v-washington-capitals-401892596",
+  "name": "Philadelphia Flyers @ Washington Capitals",
+  "type": "Hockey",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nhl-401892596.png",
+  "startTime": "2026-10-28T19:30:00Z",
+  "live": true,
+  "order": 1028,
+  "source": {
+   "key": "auto-evt-philadelphia-flyers-v-washington-capitals-401892596",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-brewers-v-rays-401908046",
+  "name": "Brewers @ Rays",
+  "type": "Baseball",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mlb-401908046.png",
+  "startTime": "2026-10-28T20:00:00Z",
+  "live": true,
+  "order": 1029,
+  "source": {
+   "key": "auto-evt-brewers-v-rays-401908046",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-new-york-knicks-v-chicago-bulls-401909886",
+  "name": "New York Knicks @ Chicago Bulls",
+  "type": "Basketball",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nba-401909886.png",
+  "startTime": "2026-10-28T20:00:00Z",
+  "live": true,
+  "order": 1030,
+  "source": {
+   "key": "auto-evt-new-york-knicks-v-chicago-bulls-401909886",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-houston-rockets-v-milwaukee-bucks-401909887",
+  "name": "Houston Rockets @ Milwaukee Bucks",
+  "type": "Basketball",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nba-401909887.png",
+  "startTime": "2026-10-28T20:00:00Z",
+  "live": true,
+  "order": 1031,
+  "source": {
+   "key": "auto-evt-houston-rockets-v-milwaukee-bucks-401909887",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-golden-state-warriors-v-minnesota-timberwolves-401909888",
+  "name": "Golden State Warriors @ Minnesota Timberwolves",
+  "type": "Basketball",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nba-401909888.png",
+  "startTime": "2026-10-28T20:00:00Z",
+  "live": true,
+  "order": 1032,
+  "source": {
+   "key": "auto-evt-golden-state-warriors-v-minnesota-timberwolves-401909888",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-denver-nuggets-v-new-orleans-pelicans-401909889",
+  "name": "Denver Nuggets @ New Orleans Pelicans",
+  "type": "Basketball",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nba-401909889.png",
+  "startTime": "2026-10-28T20:00:00Z",
+  "live": true,
+  "order": 1033,
+  "source": {
+   "key": "auto-evt-denver-nuggets-v-new-orleans-pelicans-401909889",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-jacksonville-state-gamecocks-v-new-mexico-state-aggies-401871057",
+  "name": "Jacksonville State Gamecocks @ New Mexico State Aggies",
+  "type": "American Football",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/cfb-401871057.png",
+  "startTime": "2026-10-28T20:00:00Z",
+  "live": true,
+  "order": 1034,
+  "source": {
+   "key": "auto-evt-jacksonville-state-gamecocks-v-new-mexico-state-aggies-401871057",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-real-salt-lake-v-austin-fc-761910",
+  "name": "Real Salt Lake @ Austin FC",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mls-761910.png",
+  "startTime": "2026-10-28T20:30:00Z",
+  "live": true,
+  "order": 1035,
+  "source": {
+   "key": "auto-evt-real-salt-lake-v-austin-fc-761910",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-orlando-city-sc-v-chicago-fire-fc-761911",
+  "name": "Orlando City SC @ Chicago Fire FC",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mls-761911.png",
+  "startTime": "2026-10-28T20:30:00Z",
+  "live": true,
+  "order": 1036,
+  "source": {
+   "key": "auto-evt-orlando-city-sc-v-chicago-fire-fc-761911",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-columbus-crew-v-fc-dallas-761912",
+  "name": "Columbus Crew @ FC Dallas",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mls-761912.png",
+  "startTime": "2026-10-28T20:30:00Z",
+  "live": true,
+  "order": 1037,
+  "source": {
+   "key": "auto-evt-columbus-crew-v-fc-dallas-761912",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-sporting-kansas-city-v-minnesota-united-fc-761913",
+  "name": "Sporting Kansas City @ Minnesota United FC",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mls-761913.png",
+  "startTime": "2026-10-28T20:30:00Z",
+  "live": true,
+  "order": 1038,
+  "source": {
+   "key": "auto-evt-sporting-kansas-city-v-minnesota-united-fc-761913",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-philadelphia-union-v-nashville-sc-761914",
+  "name": "Philadelphia Union @ Nashville SC",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mls-761914.png",
+  "startTime": "2026-10-28T20:30:00Z",
+  "live": true,
+  "order": 1039,
+  "source": {
+   "key": "auto-evt-philadelphia-union-v-nashville-sc-761914",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-portland-timbers-v-st-louis-city-sc-761915",
+  "name": "Portland Timbers @ St. Louis CITY SC",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mls-761915.png",
+  "startTime": "2026-10-28T20:30:00Z",
+  "live": true,
+  "order": 1040,
+  "source": {
+   "key": "auto-evt-portland-timbers-v-st-louis-city-sc-761915",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-calgary-flames-v-edmonton-oilers-401892597",
+  "name": "Calgary Flames @ Edmonton Oilers",
+  "type": "Hockey",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nhl-401892597.png",
+  "startTime": "2026-10-28T20:30:00Z",
+  "live": true,
+  "order": 1041,
+  "source": {
+   "key": "auto-evt-calgary-flames-v-edmonton-oilers-401892597",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-sao-paulo-v-bahia-401841296",
+  "name": "S\u00e3o Paulo @ Bahia",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/brasileirao-401841296.png",
+  "startTime": "2026-10-28T20:30:00Z",
+  "live": true,
+  "order": 1042,
+  "source": {
+   "key": "auto-evt-sao-paulo-v-bahia-401841296",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-botafogo-v-remo-401841297",
+  "name": "Botafogo @ Remo",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/brasileirao-401841297.png",
+  "startTime": "2026-10-28T20:30:00Z",
+  "live": true,
+  "order": 1043,
+  "source": {
+   "key": "auto-evt-botafogo-v-remo-401841297",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-san-antonio-spurs-v-utah-jazz-401909890",
+  "name": "San Antonio Spurs @ Utah Jazz",
+  "type": "Basketball",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nba-401909890.png",
+  "startTime": "2026-10-28T21:00:00Z",
+  "live": true,
+  "order": 1044,
+  "source": {
+   "key": "auto-evt-san-antonio-spurs-v-utah-jazz-401909890",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-new-jersey-devils-v-colorado-avalanche-401892598",
+  "name": "New Jersey Devils @ Colorado Avalanche",
+  "type": "Hockey",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nhl-401892598.png",
+  "startTime": "2026-10-28T21:00:00Z",
+  "live": true,
+  "order": 1045,
+  "source": {
+   "key": "auto-evt-new-jersey-devils-v-colorado-avalanche-401892598",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-oklahoma-city-thunder-v-dallas-mavericks-401909891",
+  "name": "Oklahoma City Thunder @ Dallas Mavericks",
+  "type": "Basketball",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nba-401909891.png",
+  "startTime": "2026-10-28T21:30:00Z",
+  "live": true,
+  "order": 1046,
+  "source": {
+   "key": "auto-evt-oklahoma-city-thunder-v-dallas-mavericks-401909891",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-toronto-maple-leafs-v-seattle-kraken-401892599",
+  "name": "Toronto Maple Leafs @ Seattle Kraken",
+  "type": "Hockey",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nhl-401892599.png",
+  "startTime": "2026-10-28T22:00:00Z",
+  "live": true,
+  "order": 1047,
+  "source": {
+   "key": "auto-evt-toronto-maple-leafs-v-seattle-kraken-401892599",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-los-angeles-lakers-v-la-clippers-401909892",
+  "name": "Los Angeles Lakers @ LA Clippers",
+  "type": "Basketball",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/nba-401909892.png",
+  "startTime": "2026-10-28T22:30:00Z",
+  "live": true,
+  "order": 1048,
+  "source": {
+   "key": "auto-evt-los-angeles-lakers-v-la-clippers-401909892",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-colorado-rapids-v-san-jose-earthquakes-761917",
+  "name": "Colorado Rapids @ San Jose Earthquakes",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mls-761917.png",
+  "startTime": "2026-10-28T22:30:00Z",
+  "live": true,
+  "order": 1049,
+  "source": {
+   "key": "auto-evt-colorado-rapids-v-san-jose-earthquakes-761917",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-houston-dynamo-fc-v-seattle-sounders-fc-761916",
+  "name": "Houston Dynamo FC @ Seattle Sounders FC",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mls-761916.png",
+  "startTime": "2026-10-28T22:30:00Z",
+  "live": true,
+  "order": 1050,
+  "source": {
+   "key": "auto-evt-houston-dynamo-fc-v-seattle-sounders-fc-761916",
+   "label": "TimStreams"
+  }
+ },
+ {
+  "id": "auto-evt-san-diego-fc-v-vancouver-whitecaps-761918",
+  "name": "San Diego FC @ Vancouver Whitecaps",
+  "type": "Soccer",
+  "thumbnail": "https://3feb971f.imgggre.pages.dev/mls-761918.png",
+  "startTime": "2026-10-28T22:30:00Z",
+  "live": true,
+  "order": 1051,
+  "source": {
+   "key": "auto-evt-san-diego-fc-v-vancouver-whitecaps-761918",
+   "label": "TimStreams"
+  }
+ }
+]

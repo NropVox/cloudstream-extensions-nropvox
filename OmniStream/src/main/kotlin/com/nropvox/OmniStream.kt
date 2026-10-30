@@ -256,6 +256,10 @@ class OmniStream : MainAPI() {
     ): Boolean {
         val link = parseJson<OmniLink>(data)
         if (link.type == "tv" && (link.season == null || link.episode == null)) return false
+        if (!OmniStreamParser.aired(link.year, link.airDate, (System.currentTimeMillis() / 86_400_000L).toInt())) {
+            Log.i(name, "${link.title}: not aired yet, no sources asked")
+            return false
+        }
         return OmniLinkRace(name, subtitleCallback, callback).run(sources(link), unprobed = setOf(GOPLAY))
     }
 

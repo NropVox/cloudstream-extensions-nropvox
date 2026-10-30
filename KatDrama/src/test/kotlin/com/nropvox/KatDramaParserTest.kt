@@ -118,8 +118,9 @@ class KatDramaParserTest {
 
     @Test fun server7AndVidbasicMirrors() {
         val resolved = KatDramaParser.server7(resource("server7.json"))!!
-        assertEquals("Queen of Tears", resolved.title)
+        assertEquals("queen of tears", resolved.title)
         assertEquals(2024, resolved.year)
+        assertEquals(1, resolved.episode)
         assertEquals(listOf("https://vidbasic.top/embed/ppawjtdl4j2"), resolved.urls)
         assertNull(KatDramaParser.server7("""{"success":false,"error":"No matching video stream found on Server 2 for: Arcane","title":"Arcane"}"""))
         val mirrors = KatDramaParser.mirrors(resource("vidbasic.html"))
@@ -140,5 +141,32 @@ class KatDramaParserTest {
         assertFalse(KatDramaParser.titleMatches("Queen of Tears", 2025, "Queen of Tears", 2024 - 1))
         assertFalse(KatDramaParser.titleMatches("Arcane", null, "Arcane: League of Legends", null))
         assertFalse(KatDramaParser.titleMatches("Arcane", null, null, null))
+        // Seen live on yoy5.php: names that wrap the asked one are other shows; a plural ending is the same show.
+        assertFalse(KatDramaParser.titleMatches("Blossom", 2024, "bangkok blossom", 2024))
+        assertFalse(KatDramaParser.titleMatches("Blossom", 2024, "In Blossom", 2024))
+        assertFalse(KatDramaParser.titleMatches("The Boys", 2019, "the boys who cried wolf", null))
+        assertFalse(KatDramaParser.titleMatches("Breaking Bad", 2008, "breaking bad fortune teller", 2016))
+        assertTrue(KatDramaParser.titleMatches("Squid Game", 2021, "squid games", 2021))
+        assertTrue(KatDramaParser.titleMatches("The Glory", 2022, "Glory", 2022))
+    }
+
+    /** yoy5.php for TMDB 249972 (Blossom, 2024 C-drama) on 2026-10-30: `title` echoes the request, the slug is the match. */
+    @Test fun server7ReadsTheMatchFromTheEpisodeSlug() {
+        val resolved = KatDramaParser.server7("""{"success":true,"provider":"Server 2 Og","title":"Blossom",""" +
+            """"dramaUrl":"https://asianctv.site/drama-detail/bangkok-blossom",""" +
+            """"episodeUrl":"https://asianctv.site/bangkok-blossom-2024-episode-8.html",""" +
+            """"servers":[{"name":"Server 2 Standard","src":"https://vidbasic.top/embed/2g1i1rk"}]}""")!!
+        assertEquals("bangkok blossom", resolved.title)
+        assertEquals(2024, resolved.year)
+        assertEquals(8, resolved.episode)
+        assertFalse(KatDramaParser.titleMatches("Blossom", 2024, resolved.title, resolved.year))
+
+        val noYear = KatDramaParser.server7("""{"success":true,"title":"The Boys",""" +
+            """"episodeUrl":"https://asianctv.site/the-boys-who-cried-wolf-episode-1.html","servers":[{"src":"https://vidbasic.top/embed/x"}]}""")!!
+        assertEquals("the boys who cried wolf", noYear.title)
+        assertNull(noYear.year)
+
+        val noSlug = KatDramaParser.server7("""{"success":true,"title":"Blossom","servers":[{"src":"https://vidbasic.top/embed/x"}]}""")!!
+        assertNull(noSlug.title)
     }
 }

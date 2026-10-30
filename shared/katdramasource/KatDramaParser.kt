@@ -30,8 +30,14 @@ object KatDramaParser {
         val episodes: List<Episode>,
     )
 
-    /** One file plus its subtitles, and the title the resolver matched (servers 2 and 7 look titles up by name). */
-    data class Resolved(val title: String?, val year: Int?, val urls: List<String>, val subtitles: List<Pair<String, String>>)
+    /** One file plus its subtitles, and the title (and episode) the resolver matched (servers 2 and 7 look titles up by name). */
+    data class Resolved(
+        val title: String?,
+        val year: Int?,
+        val urls: List<String>,
+        val subtitles: List<Pair<String, String>>,
+        val episode: Int? = null,
+    )
 
     data class Source(val url: String, val provider: String, val quality: String?)
 
@@ -46,7 +52,9 @@ object KatDramaParser {
     private val backdrop = Regex("""https://image\.tmdb\.org/t/p/w1280/[A-Za-z0-9_-]+\.jpg""")
     private val titleYear = Regex("""\((\d{4})\)""")
     private val titleEpisode = Regex("""\s+-\s+Episode\s+\d+\s*$""", RegexOption.IGNORE_CASE)
-    private val urlYear = Regex("""-(\d{4})-episode-\d+""")
+    // asianctv episode page: `/bangkok-blossom-2024-episode-8.html`, `/the-boys-who-cried-wolf-episode-1.html`
+    private val episodeSlug = Regex("""/([a-z0-9-]+?)(?:-(\d{4}))?-episode-(\d+)(?:\.html)?(?:[?#].*)?$""")
+    private val leadingThe = Regex("""^\s*the\s+""")
     // One-line JS array literals; `]` and `}` stay escaped for Android's ICU regex engine.
     private val sourcesArray = Regex("""const SOURCES\s*=\s*(\[.*?\]);\s*\n""", RegexOption.DOT_MATCHES_ALL)
     private val subtitlesArray = Regex("""const SUBTITLES\s*=\s*(\[.*?\]);\s*\n""", RegexOption.DOT_MATCHES_ALL)
@@ -185,14 +193,24 @@ object KatDramaParser {
         return runCatching { mapper.readTree(data).text("url") }.getOrNull() ?: url
     }
 
-    /** Server 7 (`yoy5.php?…&ajax=1`): `{success, title, dramaUrl, servers:[{name, src}]}`; `src` is a vidbasic page. */
+    /**
+     * Server 7 (`yoy5.php?…&ajax=1`): `{success, title, dramaUrl, episodeUrl, servers:[{name, src}]}`; `src` is a
+     * vidbasic page. `title` only echoes the TMDB title it was asked for, so the show it really matched is read from
+     * the `episodeUrl` slug (Blossom → `bangkok-blossom-2024-episode-1.html`). Without that slug the title is null.
+     */
     fun server7(json: String): Resolved? {
         val root = runCatching { mapper.readTree(json) }.getOrNull() ?: return null
         if (!root.path("success").asBoolean(false)) return null
         val urls = root.path("servers").mapNotNull { it.text("src") }
         if (urls.isEmpty()) return null
-        val year = root.text("dramaUrl")?.let { urlYear.find(it)?.groupValues?.get(1)?.toIntOrNull() }
-        return Resolved(root.text("title"), year, urls.distinct(), emptyList())
+        val slug = listOfNotNull(root.text("episodeUrl"), root.text("dramaUrl")).firstNotNullOfOrNull { episodeSlug.find(it) }
+        return Resolved(
+            title = slug?.groupValues?.get(1)?.replace('-', ' '),
+            year = slug?.groupValues?.get(2)?.toIntOrNull(),
+            urls = urls.distinct(),
+            subtitles = emptyList(),
+            episode = slug?.groupValues?.get(3)?.toIntOrNull(),
+        )
     }
 
     /** vidbasic embed pages list mirror embeds (dood, hglink, mixdrop, streamtape, …). */
@@ -200,9 +218,10 @@ object KatDramaParser {
         mirror.findAll(html).map { it.value }.filterNot { it.contains("vidbasic") }.distinct().toList()
 
     /**
-     * Servers 2 and 7 look shows up by name and sometimes return another show (Arcane → "EXO Arcade 2"). Accept a
-     * match when the normalised titles are equal or one contains the other and covers most of it, and the years (when
-     * both are known) are at most one apart.
+     * Servers 2 and 7 look shows up by name and sometimes return another show (Arcane → "EXO Arcade 2", Blossom →
+     * "Bangkok Blossom"). Accept a match when the normalised titles are equal, or one only extends the other at the
+     * end ("Squid Game" → "squid games") and covers most of it, and the years (when both are known) are at most one
+     * apart. A name with words in front ("In Blossom") is another show.
      */
     fun titleMatches(expected: String, expectedYear: Int?, got: String?, gotYear: Int?): Boolean {
         if (got.isNullOrBlank()) return false
@@ -212,11 +231,11 @@ object KatDramaParser {
         if (a.isEmpty() || b.isEmpty()) return false
         if (a == b) return true
         val (short, long) = if (a.length <= b.length) a to b else b to a
-        return long.contains(short) && short.length * 10 >= long.length * 7
+        return long.startsWith(short) && short.length * 10 >= long.length * 7
     }
 
     private fun normalise(title: String) =
-        title.replace(titleYear, "").lowercase().replace("&", "and").replace(Regex("[^a-z0-9]+"), "")
+        title.replace(titleYear, "").lowercase().replace(leadingThe, "").replace("&", "and").replace(Regex("[^a-z0-9]+"), "")
 
     private fun readArray(json: String): List<JsonNode> =
         runCatching { mapper.readTree(json) }.getOrNull()?.takeIf { it.isArray }?.toList().orEmpty()

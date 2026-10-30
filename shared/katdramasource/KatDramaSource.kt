@@ -58,7 +58,7 @@ object KatDramaSource {
         val resolved = KatDramaParser.server2(app.get("$SITE/2.php/${link.id}/${link.season}/${link.episode}", timeout = TIMEOUT_S).document)
             ?: return
         if (!KatDramaParser.titleMatches(link.title, link.year, resolved.title, resolved.year)) {
-            Log.d(name, "Server 2 matched \"${resolved.title}\" (${resolved.year}), not \"${link.title}\"; skipped")
+            Log.i(name, "Server 2 matched \"${resolved.title}\" (${resolved.year}), not \"${link.title}\"; skipped")
             return
         }
         resolved.urls.forEach { url ->
@@ -84,8 +84,9 @@ object KatDramaSource {
     private suspend fun vidbasic(link: KatLink, name: String, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {
         val json = app.get("$SITE/yoy5.php?id=${link.id}&s=${link.season}&e=${link.episode}&ajax=1", timeout = TIMEOUT_S).text
         val resolved = KatDramaParser.server7(json) ?: return
-        if (!KatDramaParser.titleMatches(link.title, link.year, resolved.title, resolved.year)) {
-            Log.d(name, "Server 7 matched \"${resolved.title}\" (${resolved.year}), not \"${link.title}\"; skipped")
+        if (!KatDramaParser.titleMatches(link.title, link.year, resolved.title, resolved.year) ||
+            (resolved.episode != null && resolved.episode != link.episode)) {
+            Log.i(name, "Server 7 matched \"${resolved.title}\" (${resolved.year}) ep ${resolved.episode}, not \"${link.title}\"; skipped")
             return
         }
         resolved.urls.amap { page ->

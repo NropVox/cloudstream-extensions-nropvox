@@ -202,6 +202,16 @@ class OmniStreamParserTest {
         assertFalse(OmniStreamParser.yearMatches(2022, listOf(2020)))
     }
 
+    @Test fun unairedTitlesGetNoSources() {
+        val today = OmniStreamParser.epochDay("2026-10-30")!!
+        assertTrue(OmniStreamParser.aired(2024, "2024-12-08", today))
+        assertTrue(OmniStreamParser.aired(2026, "2026-10-31", today))
+        assertTrue(OmniStreamParser.aired(2019, null, today))
+        assertFalse(OmniStreamParser.aired(2026, "2026-11-06", today))
+        // TMDB 295656, an announced C-drama also called "Blossom": no dates anywhere.
+        assertFalse(OmniStreamParser.aired(null, null, today))
+    }
+
     @Test fun finishPolicy() {
         assertFalse(OmniStreamParser.enough(3, 3))
         assertFalse(OmniStreamParser.enough(5, 1))

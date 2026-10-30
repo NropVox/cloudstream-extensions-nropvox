@@ -216,6 +216,16 @@ object OmniStreamParser {
     fun splitYear(title: String): Pair<String, Int?> =
         trailingYear.find(title)?.let { title.substring(0, it.range.first).trim() to it.groupValues[1].toInt() } ?: (title.trim() to null)
 
+    /**
+     * False for what can't have streams yet: a title TMDB gives no date at all, or an episode due after [today]
+     * (days since 1970). Every source would answer with a namesake (an announced "Blossom" got the 2024 one's files).
+     */
+    fun aired(titleYear: Int?, airDate: String?, today: Int): Boolean {
+        if (titleYear == null && airDate.isNullOrBlank()) return false
+        val day = airDate?.let(::epochDay) ?: return true
+        return day <= today + DATE_SLACK_DAYS
+    }
+
     // --- Finish policy ---
 
     /** Enough to stop waiting (after a short grace): a few working links from more than one source, or plenty from one. */

@@ -120,6 +120,10 @@ internal object OmniStreamSites {
                 .firstNotNullOfOrNull { id ->
                     val drama = safely(TAG, "KissKH drama") { KissKHSource.drama(id) } ?: return@firstNotNullOfOrNull null
                     if ((drama.type == "Movie") == link.series) return@firstNotNullOfOrNull null
+                    // KissKH names most shows without a year and dates them by when it added them, never before they
+                    // aired: a date well before the title's year is an older show of the same name.
+                    val added = drama.releaseDate?.take(4)?.toIntOrNull()
+                    if (added != null && link.years.isNotEmpty() && added < link.years.min() - 1) return@firstNotNullOfOrNull null
                     drama.episodes.mapNotNull { episode ->
                         val number = episode.number?.takeIf { it % 1.0 == 0.0 }?.toInt() ?: return@mapNotNull null
                         episode.id?.let { number to it }

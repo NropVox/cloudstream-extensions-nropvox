@@ -85,7 +85,7 @@ class FetcharrPayloadTest {
         assertEquals(mapOf("Cookie" to "c=1", "Referer" to "https://r.example/", "User-Agent" to ua), defaults)
     }
 
-    @Test fun subtitlesMapLanguagesAndDropUnrepresentable() {
+    @Test fun subtitlesKeepOnlyEnglishAndDropUnrepresentable() {
         val videoHeaders = mapOf("Referer" to "https://r.example/")
         val subs = FetcharrPayloadBuilder.subtitles(
             listOf(
@@ -102,22 +102,20 @@ class FetcharrPayloadTest {
         assertEquals(
             listOf(
                 FetcharrSubtitle("https://s.example/en.vtt", "en"),
-                FetcharrSubtitle("https://s.example/x.vtt", null),
-                FetcharrSubtitle("https://s.example/fil.vtt", null),
             ),
             subs,
         )
     }
 
-    @Test fun subtitleWithoutLangOmitsKey() {
+    @Test fun subtitleLangIsEnglish() {
         val root = json(
             FetcharrPayloadBuilder.single(
-                episode(), link(), listOf(SubtitleInfo("https://s.example/x.vtt", emptyMap(), null, true)), ua
+                episode(), link(), listOf(SubtitleInfo("https://s.example/e.vtt", emptyMap(), "en-GB", true)), ua
             )
         )
         val sub = root["single"]["subtitles"][0]
-        assertEquals("https://s.example/x.vtt", sub["url"].asText())
-        assertFalse(sub.has("lang"))
+        assertEquals("https://s.example/e.vtt", sub["url"].asText())
+        assertEquals("en", sub["lang"].asText())
     }
 
     @Test fun batchHasPerEpisodeHeadersSortedAndDeduplicated() {

@@ -120,15 +120,16 @@ object FetcharrPayloadBuilder {
 
     /**
      * Subtitles that can travel with a video sent with [videoHeaders]: http(s) URLs whose own headers are all
-     * present in that one shared header map (the payload has no per-subtitle headers). Deduplicated by URL.
+     * present in that one shared header map (the payload has no per-subtitle headers). English only; subtitles with
+     * an unknown language are dropped. Deduplicated by URL.
      */
     fun subtitles(subs: List<SubtitleInfo>, videoHeaders: Map<String, String>): List<FetcharrSubtitle> {
         val lowered = videoHeaders.mapKeys { it.key.lowercase() }
         return subs
-            .filter { it.isUrl && isHttpUrl(it.url) }
+            .filter { it.isUrl && isHttpUrl(it.url) && iso6391(it.ietfTag) == "en" }
             .filter { sub -> sub.headers.all { (k, v) -> lowered[k.lowercase()] == v } }
             .distinctBy { it.url }
-            .map { FetcharrSubtitle(it.url, iso6391(it.ietfTag)) }
+            .map { FetcharrSubtitle(it.url, "en") }
     }
 
     fun single(meta: MediaMeta, link: LinkInfo, subs: List<SubtitleInfo>, defaultUserAgent: String): FetcharrPayload {

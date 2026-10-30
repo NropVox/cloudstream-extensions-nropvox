@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 cloudstream {
     authors = listOf("NropVox")
@@ -15,7 +15,7 @@ cloudstream {
      **/
     status = 1 // will be 3 if unspecified
     tvTypes = listOf("Live")
-    iconUrl = "https://www.google.com/s2/favicons?domain=zlive.st&sz=%size%"
+    iconUrl = "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/main/docs/icons/zlive.png"
 
     isCrossPlatform = true
 }

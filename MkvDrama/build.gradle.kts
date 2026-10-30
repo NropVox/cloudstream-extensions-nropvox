@@ -1,4 +1,4 @@
-version = 5
+version = 6
 
 cloudstream {
     authors = listOf("NropVox")
@@ -6,7 +6,7 @@ cloudstream {
     description = "Asian dramas and movies from MKVDrama. Standalone download-panel and container resolution; some mirrors require browser verification."
     status = 3
     tvTypes = listOf("AsianDrama", "Movie")
-    iconUrl = "https://mkvdrama.net/static/assets/favicon/favicon.svg"
+    iconUrl = "https://raw.githubusercontent.com/NropVox/cloudstream-extensions-nropvox/main/docs/icons/mkvdrama.png"
 
     requiresResources = true
 }

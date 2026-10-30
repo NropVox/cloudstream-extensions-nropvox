@@ -1,4 +1,4 @@
-version = 3
+version = 4
 
 cloudstream {
     authors = listOf("NropVox")
@@ -16,7 +16,7 @@ cloudstream {
      **/
     status = 1 // will be 3 if unspecified
     tvTypes = listOf("Live")
-    iconUrl = "https://www.google.com/s2/favicons?domain=streamcorner.st&sz=%size%"
+    iconUrl = "https://streamcorner.st/apple-touch-icon.png"
 }
 
 android {

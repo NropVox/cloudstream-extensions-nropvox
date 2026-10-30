@@ -1,4 +1,4 @@
-version = 3
+version = 4
 
 cloudstream {
     authors = listOf("NropVox")
@@ -6,7 +6,7 @@ cloudstream {
     description = "Bollywood, Hollywood, South Indian, anime and web series from Vegamovies. Streams V-Cloud, HubCloud and V-Drive mirrors; G-Direct and 10Gbps as download-only links."
     status = 1
     tvTypes = listOf("Movie", "TvSeries", "Anime")
-    iconUrl = "https://www.google.com/s2/favicons?domain=vegamovies.lease&sz=%size%"
+    iconUrl = "https://new1.vegamovies.lease/images/apple-touch-icon.png"
 }
 
 // The nexdrive host resolvers are shared with XPrimeHub.

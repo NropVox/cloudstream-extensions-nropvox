@@ -34,6 +34,8 @@ typealias OmniSource = suspend (subtitleCallback: (SubtitleFile) -> Unit, callba
  * [OmniStreamParser.enough] working links plus a short grace, and never later than [TOTAL_MS]. The player only starts
  * once loadLinks returns, so one slow source must not hold it. Each link is probed before it is passed on, so the
  * count only includes links that answer; links that are proven dead (HTTP error, not a playlist, DRM) are dropped.
+ * Single-use links (GoPlay) can't be probed without spending them, so they pass unchecked, and so do links whose
+ * probe is still running when the race closes.
  *
  * Sources run in a detached scope, so a source stuck in blocking I/O can't delay the return; whatever it emits
  * after the race closed is ignored.
@@ -49,6 +51,9 @@ internal class OmniLinkRace(
     private val goodLinks = AtomicInteger()
     private val goodSources = ConcurrentHashMap.newKeySet<String>()
     private val dropped = AtomicInteger()
+    // Links whose probe has not answered yet, by URL. A probe that never answers counts as alive, so whatever is
+    // still here when the race closes is passed on unchecked; [pending] is also the lock between the two.
+    private val pending = HashMap<String, ExtractorLink>()
     private val enough = CompletableDeferred<Unit>()
 
     /** What one source did; read for the summary line, also for sources still running when the race closed. */
@@ -58,14 +63,17 @@ internal class OmniLinkRace(
         @Volatile var ms: Long? = null
     }
 
-    suspend fun run(sources: List<Pair<String, OmniSource>>): Boolean {
+    /** Links of the sources named in [unprobed] count without a probe: their URLs are single-use. */
+    suspend fun run(sources: List<Pair<String, OmniSource>>, unprobed: Set<String> = emptySet()): Boolean {
         val started = System.currentTimeMillis()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         var finish = "all done"
         val stats = sources.map { (label, _) -> SourceStat(label) }
         try {
             val probes = ConcurrentLinkedQueue<Job>()
-            val jobs = sources.mapIndexed { index, (_, source) -> scope.launch { runSource(stats[index], source, scope, probes) } }
+            val jobs = sources.mapIndexed { index, (label, source) ->
+                scope.launch { runSource(stats[index], source, scope, probes, label !in unprobed) }
+            }
             // Probes are only started by sources, so once those are done the queue is complete.
             val done = scope.async { jobs.joinAll(); probes.toList().joinAll() }
             val ended = withTimeoutOrNull(TOTAL_MS) {
@@ -83,13 +91,16 @@ internal class OmniLinkRace(
             closed.set(true)
             scope.cancel()
         }
+        // Slow sources (multi-hop download sites) often emit just before the close; their links still go to the player.
+        val unchecked = synchronized(pending) { pending.values.toList().also { pending.clear() } }
+        unchecked.forEach(callback)
         val elapsed = System.currentTimeMillis() - started
-        Log.i(tag, "${goodLinks.get()} links (${dropped.get()} dead dropped) in $elapsed ms, $finish; " +
+        Log.i(tag, "${goodLinks.get()} links (${dropped.get()} dead dropped, ${unchecked.size} unchecked) in $elapsed ms, $finish; " +
             stats.joinToString(", ") { "${it.label} ${it.emitted.get()}/${it.ms ?: elapsed}ms" + if (it.status == "ok") "" else " ${it.status}" })
-        return goodLinks.get() > 0
+        return goodLinks.get() > 0 || unchecked.isNotEmpty()
     }
 
-    private suspend fun runSource(stat: SourceStat, source: OmniSource, scope: CoroutineScope, probes: ConcurrentLinkedQueue<Job>) {
+    private suspend fun runSource(stat: SourceStat, source: OmniSource, scope: CoroutineScope, probes: ConcurrentLinkedQueue<Job>, probe: Boolean) {
         val started = System.currentTimeMillis()
         val label = stat.label
         try {
@@ -98,7 +109,10 @@ internal class OmniLinkRace(
                     source({ subtitle -> if (!closed.get() && subtitles.add(subtitle.url)) subtitleCallback(subtitle) }) { link ->
                         if (!closed.get() && links.add(link.url)) {
                             stat.emitted.incrementAndGet()
-                            probes.add(scope.launch { probeAndEmit(label, link) })
+                            if (probe) {
+                                synchronized(pending) { pending[link.url] = link }
+                                probes.add(scope.launch { probeAndEmit(label, link) })
+                            } else emit(label, link)
                         }
                     }
                     "ok"
@@ -117,12 +131,19 @@ internal class OmniLinkRace(
 
     private suspend fun probeAndEmit(label: String, link: ExtractorLink) {
         val alive = OmniProbe.alive(link)
-        if (closed.get()) return
-        if (!alive) {
-            dropped.incrementAndGet()
-            Log.i(tag, "Dropped dead link ${link.name}")
-            return
+        synchronized(pending) {
+            // Gone when the race closed meanwhile and passed it on unchecked.
+            if (pending.remove(link.url) == null) return
+            if (!alive) {
+                dropped.incrementAndGet()
+                Log.i(tag, "Dropped dead link ${link.name}")
+                return
+            }
+            emit(label, link)
         }
+    }
+
+    private fun emit(label: String, link: ExtractorLink) {
         callback(link)
         goodSources.add(label)
         if (OmniStreamParser.enough(goodLinks.incrementAndGet(), goodSources.size)) enough.complete(Unit)

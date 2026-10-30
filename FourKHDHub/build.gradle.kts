@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     authors = listOf("NropVox")
@@ -11,3 +11,6 @@ cloudstream {
 
 // The HubCloud resolver is shared with Vegamovies and XPrimeHub.
 android.sourceSets.getByName("main").kotlin.srcDir("../shared/nexdrive")
+
+// The 4KHDHub search and redirector chain is shared with OmniStream.
+android.sourceSets.getByName("main").kotlin.srcDir("../shared/fourkhdhubsource")

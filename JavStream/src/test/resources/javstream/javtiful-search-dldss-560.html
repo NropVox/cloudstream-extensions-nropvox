@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en" class="site-root">
+
+<head>
+        <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)" data-front-theme-color="light">
+    <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)" data-front-theme-color="dark">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <script>
+(function() {
+    var root = document.documentElement;
+    var storageKey = 'frontTheme';
+    var selectedTheme = '';
+    var systemTheme = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+
+    function preference() {
+        // Keep an explicit choice for this page even when browser storage is blocked.
+        if (selectedTheme) return selectedTheme;
+        try {
+            var stored = window.localStorage.getItem(storageKey);
+            if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
+        } catch (error) { /* The cookie can still hold a saved preference. */ }
+        try {
+            var cookie = document.cookie.match(/(?:^|;\s*)frontTheme=(light|dark|system)(?:;|$)/);
+            if (cookie) return cookie[1];
+        } catch (error) { /* Embedded players may have no storage access. */ }
+        return 'system';
+    }
+
+    function resolve() {
+        var mode = preference();
+        return mode === 'system' ? (systemTheme && systemTheme.matches ? 'light' : 'dark') : mode;
+    }
+
+    function apply(theme) {
+        var next = theme === 'light' ? 'light' : 'dark';
+        root.setAttribute('data-front-theme', next);
+        if (document.body) {
+            document.body.setAttribute('data-front-theme', next);
+            document.body.setAttribute('use-theme', next);
+        }
+        document.querySelectorAll('meta[name="theme-color"][data-front-theme-color]').forEach(function(meta) {
+            meta.setAttribute('media', meta.getAttribute('data-front-theme-color') === next ? 'all' : 'not all');
+        });
+        var statusBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+        if (statusBar) statusBar.setAttribute('content', next === 'light' ? 'default' : 'black');
+        document.dispatchEvent(new CustomEvent('front:theme-change', { detail: { theme: next, preference: preference() } }));
+    }
+
+    window.FrontTheme = {
+        get: resolve,
+        getPreference: preference,
+        set: function(theme, persist) {
+            var next = theme === 'system' ? 'system' : theme === 'light' ? 'light' : 'dark';
+            if (persist) {
+                selectedTheme = next;
+                try { window.localStorage.setItem(storageKey, next); } catch (error) { /* Cookie fallback below. */ }
+                try {
+                    document.cookie = storageKey + '=' + next + '; path=/; max-age=31536000; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : '');
+                } catch (error) { /* The choice still applies to this page. */ }
+            }
+            apply(next === 'system' ? (systemTheme && systemTheme.matches ? 'light' : 'dark') : next);
+        }
+    };
+
+    // Siteadmin error pages keep their separate admin theme preference.
+    if (root.hasAttribute('data-admin-error-theme')) return;
+
+    // Resolve before styles load, without saving the automatic system choice.
+    apply(resolve());
+    document.addEventListener('DOMContentLoaded', function() { apply(resolve()); });
+    function systemChanged() {
+        if (preference() === 'system') apply(resolve());
+    }
+    if (systemTheme) {
+        if (systemTheme.addEventListener) systemTheme.addEventListener('change', systemChanged);
+        else if (systemTheme.addListener) systemTheme.addListener(systemChanged);
+    }
+})();
+</script>
+    <script>
+        (function() {
+            try {
+                var visitorTimezone = window.Intl && Intl.DateTimeFormat
+                    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                    : '';
+                if (visitorTimezone && (visitorTimezone === 'UTC' || /^[A-Za-z_]+\/[A-Za-z0-9_+\-\/]+$/.test(visitorTimezone))) {
+                    var timezoneCookie = document.cookie ? document.cookie.match(/(?:^|; )front_timezone=([^;]*)(?:;|$)/) : null;
+                    var currentTimezone = timezoneCookie ? decodeURIComponent(timezoneCookie[1]) : '';
+                    window.frontVisitorTimezone = visitorTimezone;
+                    document.documentElement.setAttribute('data-front-timezone', visitorTimezone);
+                    if (currentTimezone !== visitorTimezone) {
+                        document.cookie = 'front_timezone=' + encodeURIComponent(visitorTimezone) + '; path=/; max-age=31536000; SameSite=Lax' + (window.location.protocol === 'https:' ? '; Secure' : '');
+                    }
+                }
+            } catch (error) {
+                window.frontVisitorTimezone = '';
+            }
+        })();
+    </script>
+            <title>Search Results for DLDSS-560 | Javtiful</title>
+    <meta name="description" content="Search results for DLDSS-560. Find matching videos, channels, categories, and related recommendations.">
+            <meta name="keywords" content="search, videos">
+        <meta name="robots" content="noindex, follow">
+    <link rel="canonical" href="https://javtiful.com/search?q=DLDSS-560">
+        <meta property="og:site_name" content="Javtiful">
+    <meta property="og:title" content="Search Results for DLDSS-560 | Javtiful">
+    <meta property="og:description" content="Search results for DLDSS-560. Find matching videos, channels, categories, and related recommendations.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://javtiful.com/search?q=DLDSS-560">
+    <meta property="og:image" content="https://javtiful.com/uploads/site/logo/2026/04/27/215c2694af8e5a2a3b487b6711f22866.png">
+            <meta property="og:locale" content="en">
+                <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Search Results for DLDSS-560 | Javtiful">
+    <meta name="twitter:description" content="Search results for DLDSS-560. Find matching videos, channels, categories, and related recommendations.">
+    <meta name="twitter:image" content="https://javtiful.com/uploads/site/logo/2026/04/27/215c2694af8e5a2a3b487b6711f22866.png">
+                <link rel="icon" href="/uploads/site/icon/2026/04/27/new_jt_icon.png">
+                <script type="application/ld+json">
+            {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://javtiful.com/main"},{"@type":"ListItem","position":2,"name":"Search","item":"https://javtiful.com/search?q=DLDSS-560"}]}        </script>
+            <script type="application/ld+json">
+            {"@context":"https://schema.org","@type":"WebSite","name":"Javtiful","url":"https://javtiful.com/main","potentialAction":{"@type":"SearchAction","target":"https://javtiful.com/search?q={search_term_string}","query-input":"required name=search_term_string"}}        </script>
+            <script type="application/ld+json">
+            {"@context":"https://schema.org","@type":"Organization","name":"Javtiful","url":"https://javtiful.com/main","logo":"https://javtiful.com/uploads/site/logo/2026/04/27/215c2694af8e5a2a3b487b6711f22866.png"}        </script>
+                <script async src="https://www.googletagmanager.com/gtag/js?id=G-3NDZG9WXYS"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+
+            function gtag() {
+                dataLayer.push(arguments);
+            }
+            gtag('js', new Date());
+            gtag('config', 'G-3NDZG9WXYS');
+        </script>
+            <link rel="preload" href="/assets/front/css/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/assets/front/css/font.css?v=dc1b5&amp;rev=1777289810">
+    <link rel="stylesheet" href="/assets/front/bootstrap/css/bootstrap.min.css?v=dc1b5&amp;rev=1777289810">
+        <link rel="stylesheet" href="/assets/front/css/base.css?v=dc1b5&amp;rev=1793249524">
+    <link rel="stylesheet" href="/assets/front/css/fonts.css?v=dc1b5&amp;rev=1791560352">
+    <link rel="stylesheet" href="/assets/front/css/layout.css?v=dc1b5&amp;rev=1793029344">
+            <link rel="stylesheet" href="/assets/front/css/theme.css?v=dc1b5&amp;rev=1792917204">
+    <link rel="stylesheet" href="/assets/front/css/announcement.css?v=dc1b5&amp;rev=1792917204">
+                <link rel="stylesheet" href="/assets/front/css/videos.css?v=dc1b5&amp;rev=1791860946">
+                                                                                        </head>
+
+<body class="site-page" data-front-theme="dark" use-theme="dark">
+                        <script type="text/javascript" src="//cdn.fozekikikiminu.com/sdk/v1/dd.p.js" data-ts-spot="b2dba118955e43e589b85672d68c2d1a" data-ts-domain="fozekikikiminu.com"  async defer></script>        
+        <div class="site-shell" data-site-shell>
+    <header class="site-header">
+    <div class="site-header__brand">
+        <button type="button" class="navigation-toggle" data-sidebar-toggle aria-label="Collapse sidebar" aria-expanded="true" aria-controls="site-navigation">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
+        </button>
+            <a class="site-brand" href="/main" aria-label="Javtiful Home">
+                    <img class="site-brand__image" src="/uploads/site/logo/2026/04/27/215c2694af8e5a2a3b487b6711f22866.png" alt="Javtiful" width="110" height="28">
+            </a>
+    </div>
+    <div class="site-header__actions">
+        <form class="search-field" action="/search" method="get" role="search">
+            <label><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0 M16 16l5 5"/></svg><input type="search" name="q" value="DLDSS-560" placeholder="Search videos, channels, actresses" aria-label="Search videos, channels, actresses" required></label>
+        </form>
+        <button type="button" class="icon-button search-toggle" data-search-toggle aria-label="Search" aria-expanded="false" aria-controls="mobile-search"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0 M16 16l5 5"/></svg></button>
+        <a class="premium-link" href="/premium-benefit"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 18 2-11 5 5 2-7 2 7 5-5 2 11z"/></svg><span>Premium</span></a>
+        <div class="header-menu preferences-menu">
+    <button type="button" class="icon-button preferences-toggle" data-popover-toggle="preferences-options" aria-label="Appearance and language" title="Appearance and language" aria-expanded="false" aria-controls="preferences-options">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+    </button>
+    <div class="menu-popover preferences-popover" id="preferences-options" data-preferences-menu data-direction="forward" hidden>
+        <div class="preferences-panel" data-preferences-panel="main">
+                            <button type="button" class="menu-option" data-preferences-open="appearance" aria-controls="preferences-appearance">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none"/></svg><span>Appearance</span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+                </button>
+                        <button type="button" class="menu-option" data-preferences-open="language" aria-controls="preferences-language"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M3 12h18 M16 12c0 5-1.8 9-4 9s-4-4-4-9 1.8-9 4-9 4 4 4 9"/></svg><span>Language Switching</span><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
+        </div>
+                    <div class="preferences-panel" id="preferences-appearance" data-preferences-panel="appearance" hidden>
+                <button type="button" class="menu-option preferences-back" data-preferences-back aria-label="Back to settings from Appearance"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18"/></svg><span>Appearance</span></button>
+                <p class="preferences-note" id="preferences-theme-note">Setting applies to this browser only</p>
+<fieldset class="preferences-choices" aria-label="Appearance" aria-describedby="preferences-theme-note">
+            <label class="menu-option preferences-choice">
+            <input class="preferences-radio" type="radio" name="preferences-theme-preference" value="system" data-front-theme-choice>
+            <svg class="preferences-choice-icon" data-theme-icon="system" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/>
+                            </svg><span>Use device theme</span>
+            <svg class="preferences-check" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 6"/></svg>
+        </label>
+            <label class="menu-option preferences-choice">
+            <input class="preferences-radio" type="radio" name="preferences-theme-preference" value="dark" data-front-theme-choice>
+            <svg class="preferences-choice-icon" data-theme-icon="dark" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M20.8 13.1A9 9 0 0 1 10.9 3.2 9 9 0 1 0 20.8 13.1Z"/>
+                            </svg><span>Dark theme</span>
+            <svg class="preferences-check" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 6"/></svg>
+        </label>
+            <label class="menu-option preferences-choice">
+            <input class="preferences-radio" type="radio" name="preferences-theme-preference" value="light" data-front-theme-choice>
+            <svg class="preferences-choice-icon" data-theme-icon="light" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+                            </svg><span>Light theme</span>
+            <svg class="preferences-check" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 6"/></svg>
+        </label>
+    </fieldset>
+            </div>
+                <div class="preferences-panel" id="preferences-language" data-preferences-panel="language" hidden>
+            <button type="button" class="menu-option preferences-back" data-preferences-back aria-label="Back to settings from Language Switching"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18"/></svg><span>Language Switching</span></button>
+                            <a class="menu-option is-active" href="/search?q=DLDSS-560" lang="en" aria-current="true"><span>English</span><small>EN</small></a>
+                            <a class="menu-option" href="/id/search?q=DLDSS-560" lang="id"><span>Indonesia</span><small>ID</small></a>
+                            <a class="menu-option" href="/ja/search?q=DLDSS-560" lang="ja"><span>Japanese</span><small>JA</small></a>
+                            <a class="menu-option" href="/zh/search?q=DLDSS-560" lang="zh"><span>Chinese</span><small>ZH</small></a>
+                            <a class="menu-option" href="/ko/search?q=DLDSS-560" lang="ko"><span>Korean</span><small>KR</small></a>
+                            <a class="menu-option" href="/vi/search?q=DLDSS-560" lang="vi"><span>Vietnamese</span><small>VN</small></a>
+                    </div>
+    </div>
+</div>
+                    <a class="icon-button account-toggle" href="/login" data-auth-open="login" aria-label="Login"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></a>
+            </div>
+    <form class="mobile-search" id="mobile-search" action="/search" method="get" role="search" hidden>
+        <label><input type="search" name="q" value="DLDSS-560" placeholder="Search videos, channels, actresses" aria-label="Search videos, channels, actresses" required><button type="button" class="search-clear" data-search-clear aria-label="Clear search" hidden><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12 M18 6 6 18"/></svg></button><button type="submit" class="search-submit" aria-label="Search"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0 M16 16l5 5"/></svg></button></label>
+        <button type="button" class="icon-button" data-search-toggle aria-label="Close search"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12 M18 6 6 18"/></svg></button>
+    </form>
+</header>
+    <div class="popover-backdrop" data-popover-close hidden></div>
+    <div class="site-columns">
+        <div class="drawer-backdrop" data-drawer-close hidden></div>
+        <aside class="site-sidebar" id="site-navigation" aria-label="Primary navigation">
+    <div class="drawer-navigation" data-drawer-panel="main">
+    <nav class="navigation-list">
+                                                                <a class="navigation-link" href="/main" title="Home">
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11 12 3l9 8v10h-6v-6H9v6H3z"/></svg>                                        <span class="navigation-link__label">Home</span>                </a>
+                                                            <a class="navigation-link" href="/foryou" title="For You">
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.4 5.2 5.6.7-4.1 3.9 1.1 5.6L12 15.6 7 18.4l1.1-5.6L4 8.9l5.6-.7z"/></svg>                                        <span class="navigation-link__label">For You</span>                </a>
+                                                            <a class="navigation-link" href="/shorts" title="Shorts">
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z M10 9.5l4.5 2.5-4.5 2.5z"/></svg>                                        <span class="navigation-link__label">Shorts</span>                </a>
+                                                            <a class="navigation-link is-active" href="/videos" title="Videos" data-submenu-toggle="navigation-group-0-3" aria-expanded="true" aria-controls="navigation-group-0-3">
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4z M10 9l5 3-5 3z"/></svg>                                        <span class="navigation-link__label">Videos</span><span class="navigation-chevron"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span>                </a>
+                                    <div class="navigation-submenu is-open" id="navigation-group-0-3"><div><div class="navigation-submenu__links">
+                        <a href="/videos">Videos</a><a href="/censored">Censored</a><a href="/uncensored">Uncensored</a><a href="/reducing-mosaic">Reducing Mosaic</a><a href="/videos?sort=popular_week">Popular This Week</a><a href="/videos?sort=most_viewed">Most Viewed</a><a href="/videos?sort=most_liked">Most Liked</a>                    </div></div></div>
+                                                            <a class="navigation-link" href="/categories" title="Browse" data-submenu-toggle="navigation-group-0-4" aria-expanded="false" aria-controls="navigation-group-0-4">
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z"/></svg>                                        <span class="navigation-link__label">Browse</span><span class="navigation-chevron"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span>                </a>
+                                    <div class="navigation-submenu" id="navigation-group-0-4" inert><div><div class="navigation-submenu__links">
+                        <a href="/categories">Categories</a><a href="/channels">Channels</a><a href="/actresses">Actresses</a>                    </div></div></div>
+                                                <span class="navigation-divider"></span><span class="navigation-heading">Library</span>                                            <a class="navigation-link" href="/profile" title="My Feed" data-auth-open="login">
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5"/></svg>                                        <span class="navigation-link__label">My Feed</span>                </a>
+                                                            <a class="navigation-link" href="/collections" title="Collections" data-auth-open="login">
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h18v13H3z M6 4h12 M10 11l5 3-5 3z"/></svg>                                        <span class="navigation-link__label">Collections</span>                </a>
+                                                            <a class="navigation-link" href="/collections/subscriptions" title="Subscriptions" data-auth-open="login">
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75"/></svg>                                        <span class="navigation-link__label">Subscriptions</span>                </a>
+                                                <span class="navigation-divider"></span><span class="navigation-heading">Partner</span>                                            <a class="navigation-link" href="https://theporndude.com/" title="The Porn Dude" target="_blank" rel="nofollow noopener">
+                                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1 M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>                                        <span class="navigation-link__label">The Porn Dude</span>                </a>
+                                                            <a class="navigation-link" href="https://t.nettrck.store/c1/b55dbeb3-59fc-48b3-b04d-a653bb2e26e7" title="LiveSex" target="_blank" rel="nofollow noopener">
+                                            <img class="navigation-link__icon" src="/uploads/ads/icons/2026/10/13/fdd41fee30b9d22da1e04c7bf6a29aa9.png" alt="" width="18" height="18" decoding="async">
+                                        <span class="navigation-link__label">LiveSex</span>                </a>
+                                                            <a class="navigation-link" href="https://rdx.jav.si/xd.php" title="LiveSexCams" target="_blank" rel="nofollow noopener">
+                                            <img class="navigation-link__icon" src="/uploads/ads/icons/2026/10/09/99ae4c330a0caee56bea15fe38369c00.png" alt="" width="18" height="18" decoding="async">
+                                        <span class="navigation-link__label">LiveSexCams</span>                </a>
+                                                            <a class="navigation-link" href="https://r.trwl1.com/c1/1c8fc935-1236-43a7-8b93-1a867a7bb1d9" title="JAVHD" target="_blank" rel="nofollow noopener">
+                                            <img class="navigation-link__icon" src="/uploads/ads/icons/2026/10/09/6281d81f48e4d8e7ad29d5ef18aa90a5.png" alt="" width="18" height="18" decoding="async">
+                                        <span class="navigation-link__label">JAVHD</span>                </a>
+                                        </nav>
+    <div class="drawer-language">
+                    <button type="button" class="navigation-link" data-drawer-appearance-open aria-expanded="false" aria-controls="drawer-appearance">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none"/></svg>
+                <span class="navigation-link__label">Appearance</span>
+                <span class="navigation-chevron"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span>
+            </button>
+                <button type="button" class="navigation-link" data-submenu-toggle="drawer-languages" aria-expanded="false" aria-controls="drawer-languages"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M3 12h18 M16 12c0 5-1.8 9-4 9s-4-4-4-9 1.8-9 4-9 4 4 4 9"/></svg><span class="navigation-link__label">Language</span><small>EN</small><span class="navigation-chevron"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></span></button>
+        <div class="navigation-submenu" id="drawer-languages" inert><div><div class="navigation-submenu__links">
+            <a href="/search?q=DLDSS-560" class="is-active"><span>English</span><small>EN</small></a><a href="/id/search?q=DLDSS-560" class=""><span>Indonesia</span><small>ID</small></a><a href="/ja/search?q=DLDSS-560" class=""><span>Japanese</span><small>JA</small></a><a href="/zh/search?q=DLDSS-560" class=""><span>Chinese</span><small>ZH</small></a><a href="/ko/search?q=DLDSS-560" class=""><span>Korean</span><small>KR</small></a><a href="/vi/search?q=DLDSS-560" class=""><span>Vietnamese</span><small>VN</small></a>        </div></div></div>
+    </div>
+    </div>
+            <div class="preferences-panel drawer-preferences" id="drawer-appearance" data-drawer-panel="appearance" hidden>
+            <button type="button" class="menu-option preferences-back" data-drawer-appearance-back aria-label="Back to navigation from Appearance"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18"/></svg><span>Appearance</span></button>
+            <p class="preferences-note" id="drawer-theme-note">Setting applies to this browser only</p>
+<fieldset class="preferences-choices" aria-label="Appearance" aria-describedby="drawer-theme-note">
+            <label class="menu-option preferences-choice">
+            <input class="preferences-radio" type="radio" name="drawer-theme-preference" value="system" data-front-theme-choice>
+            <svg class="preferences-choice-icon" data-theme-icon="system" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/>
+                            </svg><span>Use device theme</span>
+            <svg class="preferences-check" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 6"/></svg>
+        </label>
+            <label class="menu-option preferences-choice">
+            <input class="preferences-radio" type="radio" name="drawer-theme-preference" value="dark" data-front-theme-choice>
+            <svg class="preferences-choice-icon" data-theme-icon="dark" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M20.8 13.1A9 9 0 0 1 10.9 3.2 9 9 0 1 0 20.8 13.1Z"/>
+                            </svg><span>Dark theme</span>
+            <svg class="preferences-check" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 6"/></svg>
+        </label>
+            <label class="menu-option preferences-choice">
+            <input class="preferences-radio" type="radio" name="drawer-theme-preference" value="light" data-front-theme-choice>
+            <svg class="preferences-choice-icon" data-theme-icon="light" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+                            </svg><span>Light theme</span>
+            <svg class="preferences-check" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12 5 5L20 6"/></svg>
+        </label>
+    </fieldset>
+        </div>
+    </aside>
+        <div class="site-content">
+                                                <main class="page-content videos-content">
+                <div class="notice-stack" aria-live="polite">
+                                                        </div>                <section class="listing-header">
+    <div class="listing-container">
+        <h1>Search Result for &quot;DLDSS-560&quot;</h1>
+            </div>
+</section>
+
+
+
+<section class="listing-section">
+    <div class="listing-container">
+                <div class="listing-toolbar">
+                                                <div class="listing-toolbar__actions filter-controls">
+                        <button class="filter-toggle" type="button" data-front-search-filter-open data-front-search-filter-config="{&quot;formAction&quot;:&quot;/search&quot;,&quot;resetUrl&quot;:&quot;/search?q=DLDSS-560&quot;,&quot;optionsUrl&quot;:&quot;/search/filter-options&quot;,&quot;searchTerm&quot;:&quot;DLDSS-560&quot;,&quot;isSearchPage&quot;:true,&quot;currentSort&quot;:&quot;relevant&quot;,&quot;defaultSort&quot;:&quot;relevant&quot;,&quot;sortOptions&quot;:[{&quot;value&quot;:&quot;relevant&quot;,&quot;label&quot;:&quot;Relevance&quot;},{&quot;value&quot;:&quot;latest&quot;,&quot;label&quot;:&quot;Latest&quot;},{&quot;value&quot;:&quot;popular&quot;,&quot;label&quot;:&quot;Popular&quot;}],&quot;selected&quot;:{&quot;videoType&quot;:&quot;&quot;,&quot;categories&quot;:[],&quot;channel&quot;:&quot;&quot;,&quot;actress&quot;:&quot;&quot;},&quot;videoTypes&quot;:[{&quot;value&quot;:&quot;&quot;,&quot;label&quot;:&quot;All Video Types&quot;},{&quot;value&quot;:&quot;censored&quot;,&quot;label&quot;:&quot;Censored&quot;},{&quot;value&quot;:&quot;uncensored&quot;,&quot;label&quot;:&quot;Uncensored&quot;},{&quot;value&quot;:&quot;reducing_mosaic&quot;,&quot;label&quot;:&quot;Reducing Mosaic&quot;}],&quot;categories&quot;:[{&quot;id&quot;:&quot;3&quot;,&quot;name&quot;:&quot;Big Tits&quot;},{&quot;id&quot;:&quot;26&quot;,&quot;name&quot;:&quot;Beautiful Girl&quot;},{&quot;id&quot;:&quot;34&quot;,&quot;name&quot;:&quot;Amateur&quot;},{&quot;id&quot;:&quot;23&quot;,&quot;name&quot;:&quot;Married Woman&quot;},{&quot;id&quot;:&quot;226&quot;,&quot;name&quot;:&quot;Mature Woman&quot;},{&quot;id&quot;:&quot;30&quot;,&quot;name&quot;:&quot;School Girls&quot;},{&quot;id&quot;:&quot;24&quot;,&quot;name&quot;:&quot;Drama&quot;},{&quot;id&quot;:&quot;4&quot;,&quot;name&quot;:&quot;Affair&quot;},{&quot;id&quot;:&quot;29&quot;,&quot;name&quot;:&quot;Office Lady&quot;},{&quot;id&quot;:&quot;31&quot;,&quot;name&quot;:&quot;Female Student&quot;},{&quot;id&quot;:&quot;225&quot;,&quot;name&quot;:&quot;Cosplay&quot;},{&quot;id&quot;:&quot;21&quot;,&quot;name&quot;:&quot;Female Teacher&quot;},{&quot;id&quot;:&quot;230&quot;,&quot;name&quot;:&quot;Chinese AV&quot;},{&quot;id&quot;:&quot;25&quot;,&quot;name&quot;:&quot;BBW&quot;},{&quot;id&quot;:&quot;32&quot;,&quot;name&quot;:&quot;Nurse&quot;},{&quot;id&quot;:&quot;22&quot;,&quot;name&quot;:&quot;Milf&quot;},{&quot;id&quot;:&quot;229&quot;,&quot;name&quot;:&quot;Female Boss&quot;},{&quot;id&quot;:&quot;28&quot;,&quot;name&quot;:&quot;Sister-in-law&quot;},{&quot;id&quot;:&quot;231&quot;,&quot;name&quot;:&quot;Female Investigator&quot;},{&quot;id&quot;:&quot;27&quot;,&quot;name&quot;:&quot;Hypnosis&quot;},{&quot;id&quot;:&quot;33&quot;,&quot;name&quot;:&quot;Housekeeper&quot;}],&quot;channels&quot;:[],&quot;actresses&quot;:[],&quot;labels&quot;:{&quot;filter&quot;:&quot;Filter videos&quot;,&quot;sortBy&quot;:&quot;Sort by&quot;,&quot;filters&quot;:&quot;Filters&quot;,&quot;videoType&quot;:&quot;Video Type&quot;,&quot;categories&quot;:&quot;Categories&quot;,&quot;channels&quot;:&quot;Channel&quot;,&quot;actresses&quot;:&quot;Actress&quot;,&quot;searchCategories&quot;:&quot;Search categories&quot;,&quot;allChannels&quot;:&quot;All Channels&quot;,&quot;allActresses&quot;:&quot;All Actresses&quot;,&quot;searchChannels&quot;:&quot;Search channels&quot;,&quot;searchActresses&quot;:&quot;Search actresses&quot;,&quot;loading&quot;:&quot;Loading...&quot;,&quot;noResults&quot;:&quot;No options found.&quot;,&quot;clear&quot;:&quot;Clear&quot;,&quot;reset&quot;:&quot;Reset&quot;,&quot;apply&quot;:&quot;Apply&quot;,&quot;close&quot;:&quot;Close add actions&quot;}}" aria-label="Filter videos">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M7 3a1 1 0 0 1 1 1v11.6l2.3-2.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L6 15.6V4a1 1 0 0 1 1-1Zm10 18a1 1 0 0 1-1-1V8.4l-2.3 2.3a1 1 0 1 1-1.4-1.4l4-4a1 1 0 0 1 1.4 0l4 4a1 1 0 0 1-1.4 1.4L18 8.4V20a1 1 0 0 1-1 1Z" fill="currentColor"></path>
+                            </svg>
+                            <span class="filter-toggle__label">Filter</span>
+                                                    </button>
+                    </div>
+                                                </div>
+                <div class="video-grid">
+                                <article class="video-card">
+    <a href="/video/115024/dldss-560-reducing-mosaic" class="video-card__thumbnail" data-front-video-preview-src="https://syyejpyh6yupolshmbfitseg.jav.si/videos/previews/2026/10/VID-7BAC2E0F/VID-7BAC2E0F_preview.mp4">
+        <img src="/assets/front/media/video-thumb-placeholder.svg" data-front-lazy-src="/uploads/uploads/videos/thumbs/2026/10/26/4a8dfaf8b3672eeacda16c0b451cbca9.jpg" alt="Thumbnail for DLDSS-560 A Secret, Hyper-sexual Encounter Between A Mother And Her Grandfather—who Has Become Dazed From Excessive Ejaculation." decoding="async" width="640" height="360">
+                    <span class="video-card__progress" aria-hidden="true" data-front-video-preview-progress><span></span></span>
+                            <span class="video-card__type">Reducing Mosaic</span>
+                        <span class="video-card__shade" aria-hidden="true"></span>
+        <span class="video-card__details"><strong>FHD</strong>02:10:36</span>
+            </a>
+    <div class="video-card__copy">
+        <a href="/video/115024/dldss-560-reducing-mosaic" class="video-card__title" title="DLDSS-560 A Secret, Hyper-sexual Encounter Between A Mother And Her Grandfather—who Has Become Dazed From Excessive Ejaculation.">DLDSS-560 A Secret, Hyper-sexual Encounter Between A Mother And Her Grandfather—who Has Become Dazed From Excessive Ejaculation.</a>
+        <div class="video-card__meta">65.2K views <span aria-hidden="true">·</span> 3 days ago</div>
+            </div>
+</article>
+        </div>
+                                    <div class="listing-ad">
+                <div class="front-feature-placement ad-slot" data-front-feature-placement><div class="front-feature-placement-item leaderboard-placement" data-front-feature-item data-front-feature-kind="embed" data-front-feature-id="4" data-leaderboard><div class="leaderboard-content" data-leaderboard-content><script
+  src="https://cdn.fozekikikiminu.com/sdk/v1/dd.ms.js"
+  data-ts-spot="c27f5a3457134e03a160481051e0479a"
+  data-ts-domain="fozekikikiminu.com"
+  async defer
+></script></div></div></div>            </div>
+            </div>
+</section>
+            </main>
+            <footer class="site-footer">
+    <div class="site-footer__content"><div class="site-footer__brand">    <a class="site-brand" href="/main" aria-label="Javtiful Home">
+                    <img class="site-brand__image" src="/uploads/site/logo/2026/04/27/215c2694af8e5a2a3b487b6711f22866.png" alt="Javtiful" width="110" height="28">
+            </a>
+<p>Watch more than 100,000 Full HD JAV Online For Free at Javtiful</p></div></div>
+    <div class="site-footer__copyright">
+        <span>© 2026 Javtiful · ALL RIGHTS RESERVED</span>
+        <div class="site-footer__links"><a href="/advertisement" target="_blank" rel="noopener">Advertisement</a></div>
+    </div>
+</footer>
+        </div>
+    </div>
+</div>
+<div class="sheet-backdrop" data-sheet-close hidden></div>
+    <div class="navigation-sheet" id="sheet-videos" role="dialog" aria-modal="true" aria-labelledby="sheet-title-videos" hidden tabindex="-1">
+        <span class="navigation-sheet__handle" aria-hidden="true"></span>
+        <div class="navigation-sheet__heading"><span id="sheet-title-videos">Videos</span><button type="button" class="sheet-close" data-sheet-close aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12 M18 6 6 18"/></svg></button></div>
+        <div class="navigation-sheet__grid"><a href="/videos"><span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 10l5-3v10l-5-3z M3 7h12v10H3z"/></svg></span>Videos</a><a href="/censored"><span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 10l5-3v10l-5-3z M3 7h12v10H3z"/></svg></span>Censored</a><a href="/uncensored"><span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 10l5-3v10l-5-3z M3 7h12v10H3z"/></svg></span>Uncensored</a><a href="/reducing-mosaic"><span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 10l5-3v10l-5-3z M3 7h12v10H3z"/></svg></span>Reducing Mosaic</a><a href="/videos?sort=popular_week"><span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 10l5-3v10l-5-3z M3 7h12v10H3z"/></svg></span>Popular This Week</a><a href="/videos?sort=most_viewed"><span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 10l5-3v10l-5-3z M3 7h12v10H3z"/></svg></span>Most Viewed</a><a href="/videos?sort=most_liked"><span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 10l5-3v10l-5-3z M3 7h12v10H3z"/></svg></span>Most Liked</a></div>
+    </div>
+    <div class="navigation-sheet" id="sheet-browse" role="dialog" aria-modal="true" aria-labelledby="sheet-title-browse" hidden tabindex="-1">
+        <span class="navigation-sheet__handle" aria-hidden="true"></span>
+        <div class="navigation-sheet__heading"><span id="sheet-title-browse">Browse</span><button type="button" class="sheet-close" data-sheet-close aria-label="Close"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12 M18 6 6 18"/></svg></button></div>
+        <div class="navigation-sheet__grid"><a href="/categories"><span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z"/></svg></span>Categories</a><a href="/channels"><span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 8h20v12H2z M8 3l4 5 4-5 M7 12v4 M11 12v4"/></svg></span>Channels</a><a href="/actresses"><span><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span>Actresses</a></div>
+    </div>
+<nav class="mobile-dock" aria-label="Mobile navigation">
+    <a class="" href="/main"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11 12 3l9 8v10h-6v-6H9v6H3z"/></svg><span>Home</span></a>
+    <button type="button" class="is-active" data-sheet-toggle="videos" aria-expanded="false" aria-controls="sheet-videos"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v14H4z M10 9l5 3-5 3z"/></svg><span>Videos</span></button>
+    <a class="dock-shorts" href="/shorts"><span class="dock-shorts__icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5v15a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19.5z M10.2 8.6v6.8l5.4-3.4z"/></svg></span><span>Shorts</span></a>    <button type="button" class="" data-sheet-toggle="browse" aria-expanded="false" aria-controls="sheet-browse"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z"/></svg><span>Browse</span></button>
+    <a href="/login" data-auth-open="login"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg><span>Profile</span></a>
+</nav>
+<div class="toast-region" data-toast-region role="status" aria-live="polite" aria-atomic="true">
+    <div class="toast-notification" data-toast hidden>
+        <span class="toast-notification__icon" aria-hidden="true"><svg class="toast-notification__check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12.5 10 17 19 7.5"></polyline></svg><svg class="toast-notification__cross" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg></span>
+        <span class="toast-notification__message" data-toast-message></span>
+        <button type="button" class="toast-notification__undo" data-toast-undo hidden></button>
+    </div>
+</div>
+    <div class="auth-overlay" data-auth-overlay hidden>
+    <div class="auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-title" aria-describedby="auth-description" tabindex="-1">
+        <button type="button" class="auth-dialog__close" data-auth-close aria-label="Close"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 6 12 12 M18 6 6 18"/></svg></button>
+        <div class="auth-dialog__heading">
+            <span class="auth-dialog__mark"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="m8 5 11 7-11 7z"/></svg></span>
+            <h2 id="auth-title" data-login-title="Welcome back" data-register-title="Create your account">Welcome back</h2>
+            <p id="auth-description" data-login-description="Login to continue watching and save favorites." data-register-description="Free forever. Follow channels, build playlists, pick up where you left off.">Login to continue watching and save favorites.</p>
+        </div>
+                    <div class="auth-tabs" role="tablist" aria-label="Account access">
+                <button type="button" role="tab" id="auth-login-tab" aria-controls="auth-login-panel" aria-selected="true" data-auth-tab="login">Login</button>
+                <button type="button" role="tab" id="auth-register-tab" aria-controls="auth-register-panel" aria-selected="false" tabindex="-1" data-auth-tab="register">Create account</button>
+            </div>
+                            <form class="auth-form" id="auth-login-panel" method="post" action="/login" data-auth-form="login" role="tabpanel" aria-labelledby="auth-login-tab" data-failure-message="Please review the form fields and try again." data-loading-label="Signing in...">
+                <div class="auth-message" data-auth-message role="alert" hidden></div>
+                                <label class="auth-field"><span>Username or Email</span><input type="text" name="identity" placeholder="you@example.com" autocomplete="username" required><small data-auth-error="identity"></small></label>
+                <label class="auth-field"><span>Password</span><span class="password-field"><input type="password" name="password" placeholder="••••••••" autocomplete="current-password" required><button type="button" data-password-toggle aria-label="Show password" aria-pressed="false">Show</button></span><small data-auth-error="password"></small></label>
+                                    <div class="auth-options"><label class="auth-checkbox"><input type="checkbox" name="remember" value="1" checked><span>Remember me</span></label><a href="/forgot-password">Forgot password?</a></div>
+                                                <button type="submit" class="auth-submit">Login</button>
+                                    <div class="auth-divider">New here?</div><button type="button" class="auth-secondary" data-auth-tab="register">Create an account</button>
+                            </form>
+                    <form class="auth-form" id="auth-register-panel" method="post" action="/register" data-auth-form="register" role="tabpanel" aria-labelledby="auth-register-tab" hidden data-failure-message="Please review the form fields and try again." data-loading-label="Processing...">
+                <div class="auth-message" data-auth-message role="alert" hidden></div>
+                                    <label class="auth-field"><span>Username</span><input type="text" name="username" placeholder="username123" autocomplete="username" minlength="6" maxlength="14" pattern="[A-Za-z0-9]+" required><small data-auth-error="username"></small></label>
+                                <label class="auth-field"><span>Email</span><input type="email" name="email" placeholder="you@example.com" autocomplete="email" required><small data-auth-error="email"></small></label>
+                <label class="auth-field"><span>Password</span><span class="password-field"><input type="password" name="password" placeholder="Minimum 8 characters" autocomplete="new-password" minlength="8" required><button type="button" data-password-toggle aria-label="Show password" aria-pressed="false">Show</button></span><small data-auth-error="password"></small></label>
+                                    <label class="auth-field"><span>Confirm Password</span><span class="password-field"><input type="password" name="password_confirmation" placeholder="Repeat your password" autocomplete="new-password" required><button type="button" data-password-toggle aria-label="Show password" aria-pressed="false">Show</button></span><small data-auth-error="password_confirmation"></small></label>
+                                                <button type="submit" class="auth-submit">Create account</button>
+                                    <p class="auth-switch">Already have an account? <button type="button" data-auth-tab="login">Login</button></p>
+                            </form>
+            </div>
+</div>
+
+            <script type="application/json" id="frontLoginModalConfig">
+            {"loginUrl":"/login","csrfUrl":"/csrf-token","forgotPasswordUrl":"/forgot-password","registerUrl":"/register","allowRegistration":true,"turnstile":{"enabled":false,"siteKey":"0x4AAAAAAA5gXceyX5rH5RZV","apiUrl":"https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"},"labels":{"login":"Login","welcomeBack":"Welcome back","loginCopy":"Use your username or email to sign in.","usernameOrEmail":"Username or Email","password":"Password","passwordPlaceholder":"Enter your password","rememberMe":"Remember me","forgotPassword":"Forgot password?","signingIn":"Signing in...","noAccount":"Don\u0027t have an account yet?","registerHere":"Register here","close":"Close","reviewFields":"Please review the form fields and try again.","loginFailed":"Login failed. Please try again."}}        </script>
+    
+    
+    <script src="/assets/front/bootstrap/js/bootstrap.bundle.min.js?v=dc1b5&amp;rev=1777289810"></script>
+    <script>
+        window.frontI18n = {"justNow":"Just now","member":"Member","replyTo":"Reply to :name","writeReply":"Write your reply...","postReply":"Post Reply","signInToReply":"Sign in","signInToReplySuffix":"to reply.","noComments":"No comments yet. Be the first to start the discussion.","threadCount":":count thread","threadsCount":":count threads","reactionUpdated":"Reaction updated.","reactionFailed":"Failed to save the reaction.","removeFromFavorites":"Remove from Favorites","addToFavorites":"Add to Favorites","favoriteUpdated":"Favorite updated.","favoriteFailed":"Failed to update the favorite.","playlistSelectOrCreate":"Select a playlist or create a new one first.","commentFailed":"Failed to submit the comment.","reportFailed":"Failed to send the report.","actressCorrectionRequired":"Enter a valid actress name, 2-120 characters.","actressCorrectionFailed":"Failed to submit the correction.","profileNoFile":"No file selected.","profileUploading":"Uploading...","profileSavePhoto":"Save Photo","profileUpdated":"Profile photo updated successfully.","profileChoosePhotoFirst":"Please choose a profile photo first.","profileUpdateFailed":"Failed to update the profile photo.","removeVideoConfirm":"Remove this video from the playlist?","removeVideoSuccess":"Video removed from playlist successfully.","removeVideoFailed":"Failed to remove the video from the playlist.","deletePlaylistConfirm":"Delete this playlist?","deletePlaylistSuccess":"Playlist deleted successfully.","deletePlaylistFailed":"Failed to delete the playlist.","subscriptionRemoved":"Subscription removed.","subscriptionRemoveFailed":"Subscription could not be removed.","playlistRequired":"Playlist name is required.","playlistActions":"Playlist actions","edit":"Edit","delete":"Delete","emptyPlaylistCount":"0 videos","playlistBadgeCount":":count Videos","noVideo":"No Video","creatingPlaylist":"Creating...","createPlaylistSubmit":"Create Playlist","playlistCreatedSuccess":"Playlist created successfully.","playlistCreateFailed":"Failed to create the playlist.","playlistUpdatedSuccess":"Playlist updated.","playlistUpdateFailed":"Failed to update the playlist.","premiumSubscribe":"Subscribe","premiumSelected":"Selected","premiumLabel":"Premium","premiumDays":":count days","premiumSavePercent":"Save :count%","premiumStandard":"Standard","premiumBestValue":"This plan offers better value per day than the other available plans.","premiumBaseValue":"This plan is used as the base price reference for discount comparison.","premiumPending":"Waiting for Payment","premiumUnderpaid":"Underpaid","downloadLinkUnavailable":"Download link could not be prepared.","downloadPreparing":"Preparing...","downloadGenerateFailed":"Failed to generate the download link.","noPlaylists":"No playlists yet. Create a new playlist below.","playlistContainsVideo":"This playlist already contains the video","opening":"Opening...","openingPayment":"Opening payment...","openingPaymentInvoice":"Opening payment invoice...","premiumSelectPlan":"Please select a premium plan first.","premiumCreateInvoiceFailed":"Failed to create the payment invoice.","watchCopy":"Copy","watchReply":"Reply","watchCopied":"Copied","themeLightMode":"Light mode","themeDarkMode":"Dark mode","themeSwitchToLight":"Switch to light mode","themeSwitchToDark":"Switch to dark mode"};
+    </script>
+            <script src="/assets/front/js/common.js?v=dc1b5&amp;rev=1791866330"></script>
+    <script src="/assets/front/js/layout.js?v=dc1b5&amp;rev=1792917204"></script>
+    <script src="/assets/front/js/toast.js?v=dc1b5&amp;rev=1791519628"></script>
+                        </body>
+
+</html>

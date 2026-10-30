@@ -1,4 +1,4 @@
-version = 3
+version = 4
 
 cloudstream {
     authors = listOf("NropVox")
@@ -19,3 +19,6 @@ cloudstream {
 }
 
 // Cloudstream's inline JSON and key APIs use Java 11 bytecode.
+
+// The GoPlay session, player decryption and link refresh are shared with OmniStream.
+android.sourceSets.getByName("main").kotlin.srcDir("../shared/goplaysource")

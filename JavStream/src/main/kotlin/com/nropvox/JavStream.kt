@@ -22,12 +22,16 @@ import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newSearchResponseList
 import com.lagradost.cloudstream3.runAllAsync
+import com.lagradost.cloudstream3.utils.AppUtils.toJson
+import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jsoup.nodes.Element
 import java.net.URLEncoder
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicBoolean
 
 class JavStream : MainAPI() {
     override var mainUrl = "https://sextb.net"
@@ -86,7 +90,7 @@ class JavStream : MainAPI() {
         }
 
         if (items.isEmpty()) {
-            Log.d("JavStream", "Search list returned empty! URL: $url")
+            Log.w("JavStream", "Search list returned empty! URL: $url")
         }
 
         return newSearchResponseList(items, hasNext = items.isNotEmpty())
@@ -148,11 +152,11 @@ class JavStream : MainAPI() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.d("JavStream", "Recommendations failed: ${e.message}")
+                Log.w("JavStream", "Recommendations failed: ${e.message}")
             }
         }
 
-        return newMovieLoadResponse(title, url, TvType.NSFW, code) {
+        return newMovieLoadResponse(title, url, TvType.NSFW, JavStreamLinks(url, code).toJson()) {
             this.posterUrl = poster
             this.plot = description
             this.year = year
@@ -169,21 +173,32 @@ class JavStream : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        Log.d("JavStream", data)
+        val links = tryParseJson<JavStreamLinks>(data) ?: JavStreamParser.legacyLinks(data, mainUrl)
+        val code = links.code.ifBlank { return false }
         // The page extractors look the code up on SubtitleCat too, so the same file can arrive more than once.
         val subtitles = Collections.synchronizedSet(HashSet<String>())
         val subtitle: (SubtitleFile) -> Unit = { if (subtitles.add(it.url)) subtitleCallback(it) }
-        var found = false
-        val link: (ExtractorLink) -> Unit = { found = true; callback(it) }
+        val found = AtomicBoolean(false)
+        val link: (ExtractorLink) -> Unit = { found.set(true); callback(it) }
 
+        // The player starts only once every source has returned, so a stalled site may not hold it for long.
+        fun source(site: String, resolve: suspend () -> Unit): suspend () -> Unit = {
+            withTimeoutOrNull(SOURCE_TIMEOUT_MS) { resolve() } ?: Log.w(name, "$site: timed out")
+        }
         runAllAsync(
-            { loadExtractor("https://subtitlecat.com/?query=$data", subtitle, link) },
-            { JavStreamSources.javtiful(data)?.let { loadExtractor(it, subtitle, link) } },
-            { JavStreamSources.sextb(data)?.let { loadExtractor(it, "$mainUrl/", subtitle, link) } },
-            { JavStreamSources.missav(data)?.let { loadExtractor(it, subtitle, link) } },
-            { JavStreamSources.javgg(data, subtitle, link) },
-            { JavStreamSources.supjav(data, subtitle, link) },
+            source("SubtitleCat") { loadExtractor("https://subtitlecat.com/?query=$code", subtitle, link) },
+            source("SexTB") { loadExtractor(links.url, "$mainUrl/", subtitle, link) },
+            source("Javtiful") { JavStreamSources.javtiful(code, subtitle, link) },
+            source("MissAV") { JavStreamSources.missav(code, subtitle, link) },
+            source("JavGG") { JavStreamSources.javgg(code, subtitle, link) },
+            source("SupJav") { JavStreamSources.supjav(code, subtitle, link) },
+            source("JavFC2") { JavStreamSources.javfc2(code, subtitle, link) },
+            source("JavHD") { JavStreamSources.javhd(code, subtitle, link) },
         )
-        return found
+        return found.get()
+    }
+
+    private companion object {
+        const val SOURCE_TIMEOUT_MS = 15_000L
     }
 }

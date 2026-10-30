@@ -1,6 +1,5 @@
 package com.nropvox
 
-import android.webkit.CookieManager
 import com.lagradost.api.Log
 import com.lagradost.cloudstream3.CloudStreamApp
 import com.lagradost.cloudstream3.ErrorLoadingException
@@ -8,6 +7,10 @@ import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.network.WebViewResolver
 import com.lagradost.nicehttp.NiceResponse
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.net.URI
@@ -16,6 +19,7 @@ import java.net.URI
  * GoPlay answers every page request with an HTTP 404 Turnstile form until the client holds
  * its `d`/`locl` cookies. A browser that passes Turnstile POSTs the form back and receives
  * them; plain HTTP requests then work with those cookies and the same user agent.
+ * Shared by the GoPlay and OmniStream plugins; both store the session under the same app keys.
  */
 object GoPlaySession {
     private const val TAG = "GoPlay"
@@ -33,12 +37,15 @@ object GoPlaySession {
 
     private val refreshLock = Mutex()
 
-    @Volatile
-    private var cookies: Map<String, String> =
-        CloudStreamApp.getKey<String>(COOKIE_KEY)?.let(::parseCookies).orEmpty()
+    // OmniStream gives a source only seconds; a WebView solve cancelled halfway would leave no cookies for next time.
+    private val solver = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     @Volatile
-    private var userAgent: String? = CloudStreamApp.getKey<String>(USER_AGENT_KEY)
+    private var cookies: Map<String, String> =
+        loadKey(COOKIE_KEY)?.let(::parseCookies).orEmpty()
+
+    @Volatile
+    private var userAgent: String? = loadKey(USER_AGENT_KEY)
 
     val currentUserAgent: String get() = userAgent ?: USER_AGENT
 
@@ -64,7 +71,10 @@ object GoPlaySession {
         throw ErrorLoadingException("GoPlay verification failed. Open GoPlay in WebView, then retry.")
     }
 
-    private suspend fun refresh(stale: Map<String, String>, url: String) = refreshLock.withLock {
+    /** Runs outside the caller's coroutine, so a solve finishes and saves its cookies even if the caller gives up. */
+    private suspend fun refresh(stale: Map<String, String>, url: String) = solver.async { solve(stale, url) }.await()
+
+    private suspend fun solve(stale: Map<String, String>, url: String) = refreshLock.withLock {
         // Another request already replaced the cookies while this one waited.
         if (cookies != stale) return@withLock
 
@@ -102,12 +112,32 @@ object GoPlaySession {
     private fun save(newCookies: Map<String, String>, newUserAgent: String) {
         cookies = newCookies
         userAgent = newUserAgent
-        CloudStreamApp.setKey(COOKIE_KEY, newCookies.entries.joinToString("; ") { "${it.key}=${it.value}" })
-        CloudStreamApp.setKey(USER_AGENT_KEY, newUserAgent)
+        CloudStreamApp.setKeyClass(COOKIE_KEY, newCookies.entries.joinToString("; ") { "${it.key}=${it.value}" })
+        CloudStreamApp.setKeyClass(USER_AGENT_KEY, newUserAgent)
+    }
+
+    // The Class-taking key calls: the reified getKey/setKey inline Android preferences code into the caller, which the
+    // cross-platform OmniStream jar must not contain.
+    private fun loadKey(key: String): String? = try {
+        CloudStreamApp.getKeyClass(key, String::class.java)
+    } catch (e: Exception) {
+        null
+    }
+
+    /**
+     * `android.webkit.CookieManager.getInstance()`, by reflection: OmniStream compiles this file into a cross-platform
+     * jar, which must not import Android classes. Null where there is no WebView.
+     */
+    private fun cookieManager(): Any? = try {
+        Class.forName("android.webkit.CookieManager").getMethod("getInstance").invoke(null)
+    } catch (e: Throwable) {
+        null
     }
 
     private fun webViewCookies(origin: String): Map<String, String> = try {
-        CookieManager.getInstance().getCookie(origin)?.let(::parseCookies).orEmpty()
+        val manager = cookieManager() ?: return emptyMap()
+        (manager.javaClass.getMethod("getCookie", String::class.java).invoke(manager, origin) as String?)
+            ?.let(::parseCookies).orEmpty()
     } catch (e: Exception) {
         // CookieManager can throw on devices without a WebView implementation.
         emptyMap()
@@ -116,13 +146,14 @@ object GoPlaySession {
     /** Stale GoPlay cookies would otherwise make a fresh solve look successful. */
     private fun expireWebViewCookies(origin: String) {
         try {
-            val manager = CookieManager.getInstance()
+            val manager = cookieManager() ?: return
+            val setCookie = manager.javaClass.getMethod("setCookie", String::class.java, String::class.java)
             val domain = "." + URI(origin).host
             webViewCookies(origin).keys.forEach { name ->
-                manager.setCookie(origin, "$name=; Max-Age=0; Path=/; Domain=$domain; Secure")
-                manager.setCookie(origin, "$name=; Max-Age=0; Path=/; Secure")
+                setCookie.invoke(manager, origin, "$name=; Max-Age=0; Path=/; Domain=$domain; Secure")
+                setCookie.invoke(manager, origin, "$name=; Max-Age=0; Path=/; Secure")
             }
-            manager.flush()
+            manager.javaClass.getMethod("flush").invoke(manager)
         } catch (_: Exception) {
         }
     }

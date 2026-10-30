@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import com.nropvox.OmniStreamParser.SiteHit
 import org.junit.Test
 
 class OmniStreamParserTest {
@@ -114,6 +115,91 @@ class OmniStreamParserTest {
         assertTrue(OmniStreamParser.isDrm("#EXTM3U\n#EXT-X-SESSION-KEY:METHOD=SAMPLE-AES-CTR,KEYFORMAT=\"urn:uuid:edef8ba9\""))
         assertFalse(OmniStreamParser.isDrm("#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"key.bin\""))
         assertFalse(OmniStreamParser.isDrm(master))
+    }
+
+    // --- Title-searched sites ---
+
+    @Test fun vegamoviesHitsMatchByImdbId() {
+        val search = jacksonObjectMapper().readValue<VgSearch>(text("vegamovies-search-oppenheimer.json"))
+        val hits = search.hits.orEmpty().mapNotNull { it.document }.map { doc ->
+            SiteHit(doc.permalink!!, VegamoviesParser.cleanTitle(doc.title!!), VegamoviesParser.year(doc.title!!),
+                doc.imdbId, VegamoviesParser.isSeries(doc.title!!), doc.title!!)
+        }
+        assertEquals(listOf("Oppenheimer", "Oppenheimer"), hits.map { it.title })
+        fun matches(names: List<String>, year: Int, imdbId: String?, series: Boolean) =
+            OmniStreamParser.matches(hits, names, listOf(year), imdbId, series, null)
+        // Both posts (dual audio and English) are the film.
+        assertEquals(2, matches(listOf("Oppenheimer"), 2023, "tt15398776", false).size)
+        // Another title's IMDb id rules them out, whatever the name.
+        assertTrue(matches(listOf("Oppenheimer"), 2023, "tt0000001", false).isEmpty())
+        // Without an id, the name and the year decide.
+        assertEquals(2, matches(listOf("Oppenheimer"), 2024, null, false).size)
+        assertTrue(matches(listOf("Oppenheimer"), 2026, null, false).isEmpty())
+        assertTrue(matches(listOf("Oppenheimer"), 2023, "tt15398776", true).isEmpty())
+    }
+
+    @Test fun moviesModCardsMatchByNameYearAndSeason() {
+        val doc = MoviesModParser.body(text("moviesmod-search-lupin.html"), "https://moviesmod.meme/")
+        val hits = MoviesModParser.cards(doc).map { card ->
+            SiteHit(card.url, MoviesModParser.cleanTitle(card.title), MoviesModParser.year(card.title),
+                series = MoviesModParser.isSeries(card.title), label = card.title)
+        }
+        val show = OmniStreamParser.matches(hits, listOf("Lupin"), listOf(2021), null, series = true, season = 3)
+        assertEquals(listOf("https://moviesmod.meme/download-lupin-season-1-3-hindi-480p-720p-1080p/"), show)
+        // Season 5 is not in the "Season 1-4" post.
+        assertTrue(OmniStreamParser.matches(hits, listOf("Lupin"), listOf(2021), null, series = true, season = 5).isEmpty())
+        val film = OmniStreamParser.matches(hits, listOf("Lupin III: The First", "ルパン三世 THE FIRST"), listOf(2019), null, false, null)
+        assertEquals(listOf("https://moviesmod.meme/download-lupin-iii-the-first-japanese-480p-720p-1080p/"), film)
+    }
+
+    @Test fun fourKHDHubCardsMatchByNameYearAndKind() {
+        val doc = org.jsoup.Jsoup.parse(text("4khdhub-search-batman.html"), "https://4khdhub.one/")
+        val hits = FourKHDHubParser.cards(doc, "https://4khdhub.one").map { SiteHit(it.url, it.title, it.year, series = it.series) }
+        assertEquals(listOf("https://4khdhub.one/batman-movie-908/"), OmniStreamParser.matches(hits, listOf("Batman"), listOf(1989), null, false, null))
+        assertEquals(listOf("https://4khdhub.one/batman-robin-movie-911/"),
+            OmniStreamParser.matches(hits, listOf("Batman & Robin"), listOf(1997), null, false, null))
+        assertEquals(listOf("https://4khdhub.one/batman-caped-crusader-series-939/"),
+            OmniStreamParser.matches(hits, listOf("Batman: Caped Crusader"), listOf(2024, 2026), null, true, null))
+        assertTrue(OmniStreamParser.matches(hits, listOf("Batman: Caped Crusader"), listOf(2024), null, false, null).isEmpty())
+    }
+
+    @Test fun kissKHCardsMatchSeasonNamesAndRemakeYears() {
+        val cards = jacksonObjectMapper().readValue<List<KissCard>>(text("kisskh-search-love.json"))
+        val hits = cards.map { card -> OmniStreamParser.splitYear(card.title!!).let { (title, year) -> SiteHit(card.id!!, title, year) } }
+        fun match(name: String, season: Int?, vararg years: Int) =
+            OmniStreamParser.matches(hits, OmniStreamParser.seasonNames(listOf(name), season), years.toList(), null, season != null, null)
+        assertEquals(listOf(11122), match("Poisonous Love", 1, 2025))
+        // The year after a remade name tells it apart from another show of that name.
+        assertTrue(match("Poisonous Love", 1, 2019).isEmpty())
+        assertEquals(listOf(11829), match("Tide of Love", 1, 2025))
+        assertEquals(listOf(11627), match("EXchange 4 - Transit Love", 4, 2025))
+        assertEquals(listOf(10606), match("Speed and Love", 1, 2025))
+    }
+
+    @Test fun seasonMentions() {
+        assertEquals(0, OmniStreamParser.seasonRank("Download Lupin (Season 1-4) Multi Audio", 2))
+        assertEquals(0, OmniStreamParser.seasonRank("Download Lupin S01-S04 Hindi Dubbed 480p", 3))
+        assertEquals(0, OmniStreamParser.seasonRank("Download Hercai (Season 1) [E90 Added] Dual Audio", 1))
+        assertEquals(2, OmniStreamParser.seasonRank("Download Hercai (Season 1) [E90 Added] Dual Audio", 2))
+        assertEquals(0, OmniStreamParser.seasonRank("Download The Boys (Season 4) [S04E08 Added] {Hindi-English}", 4))
+        assertEquals(0, OmniStreamParser.seasonRank("Stranger Things Season 4 – Part 2 {Hindi-English} 1080p", 4))
+        assertEquals(1, OmniStreamParser.seasonRank("Download Runner (2026) Dual Audio (English-Hindi) WEB-DL", 1))
+    }
+
+    @Test fun titleNames() {
+        assertTrue(OmniStreamParser.sameTitle("Pokémon: The First Movie", listOf("Pokemon - The First Movie")))
+        assertTrue(OmniStreamParser.sameTitle("Batman and Robin", listOf("Batman & Robin")))
+        assertFalse(OmniStreamParser.sameTitle("Batman vs Robin", listOf("Batman & Robin")))
+        assertTrue(OmniStreamParser.sameTitle("눈물의 여왕", listOf("Queen of Tears", "눈물의 여왕")))
+        assertFalse(OmniStreamParser.sameTitle("!!!", listOf("???")))
+        assertEquals(listOf("Lovely Runner"), OmniStreamParser.seasonNames(listOf("Lovely Runner"), null))
+        assertEquals(listOf("Taxi Driver", "Taxi Driver Season 1"), OmniStreamParser.seasonNames(listOf("Taxi Driver"), 1))
+        assertEquals(listOf("Taxi Driver Season 3", "Taxi Driver 3"), OmniStreamParser.seasonNames(listOf("Taxi Driver"), 3))
+        assertEquals("Poisonous Love" to 2025, OmniStreamParser.splitYear("Poisonous Love (2025)"))
+        assertEquals("Love (Uncut Ver.)" to null, OmniStreamParser.splitYear("Love (Uncut Ver.)"))
+        assertTrue(OmniStreamParser.yearMatches(null, listOf(2020)))
+        assertTrue(OmniStreamParser.yearMatches(2021, listOf(2020)))
+        assertFalse(OmniStreamParser.yearMatches(2022, listOf(2020)))
     }
 
     @Test fun finishPolicy() {

@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     authors = listOf("NropVox")
@@ -17,3 +17,6 @@ cloudstream {
     tvTypes = listOf("AsianDrama", "Movie", "Anime", "TvSeries")
     iconUrl = "https://www.google.com/s2/favicons?domain=kisskh.ovh&sz=%size%"
 }
+
+// The kisskh API calls and subtitle decryption are shared with OmniStream.
+android.sourceSets.getByName("main").kotlin.srcDir("../shared/kisskhsource")

@@ -35,13 +35,15 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import okhttp3.Interceptor
 import java.net.URLEncoder
 
 /**
  * OmniStream: a TMDB catalog (movies, shows, anime, Asian drama) whose links come from every TMDB-keyed source in
- * this repo at once (Dulo, Movy, 7Movies, TonkaCine, Cno.to, plus KatDrama for Asian titles), and for anime also the
- * AniList-keyed AnimoTv and Ani.pm after a TMDB → AniList lookup. Their resolvers are compiled in from `shared/`,
- * and [OmniLinkRace] runs them in parallel against a deadline.
+ * this repo at once (Dulo, Movy, 7Movies, TonkaCine, Cno.to, plus KatDrama for Asian titles), the sites it finds the
+ * title on by search ([OmniStreamSites]: Vegamovies, MoviesMod, 4KHDHub, plus KissKH and GoPlay for Asian titles),
+ * and for anime also the AniList-keyed AnimoTv, Ani.pm, Reanime and AnimeX after a TMDB → AniList lookup. Their
+ * resolvers are compiled in from `shared/`, and [OmniLinkRace] runs them in parallel against a deadline.
  */
 class OmniStream : MainAPI() {
     override var mainUrl = "https://www.themoviedb.org"
@@ -254,7 +256,7 @@ class OmniStream : MainAPI() {
     ): Boolean {
         val link = parseJson<OmniLink>(data)
         if (link.type == "tv" && (link.season == null || link.episode == null)) return false
-        return OmniLinkRace(name, subtitleCallback, callback).run(sources(link))
+        return OmniLinkRace(name, subtitleCallback, callback).run(sources(link), unprobed = setOf(GOPLAY))
     }
 
     /** Every source that can serve this title, each under the name it labels its links with. */
@@ -278,11 +280,16 @@ class OmniStream : MainAPI() {
             "Cno.to" to { subs, links ->
                 CnoToSource.load(CnoLink(link.type, link.id, season, episode), "Cno.to", subs, links)
             },
+            "Vegamovies" to { _, links -> OmniStreamSites.vegamovies(link, "Vegamovies", links) },
+            "MoviesMod" to { _, links -> OmniStreamSites.moviesMod(link, "MoviesMod", links) },
+            "4KHDHub" to { _, links -> OmniStreamSites.fourKHDHub(link, "4KHDHub", links) },
         )
         if (link.kind == OmniStreamParser.KIND_ASIAN) {
             sources += "KatDrama" to { subs, links ->
                 KatDramaSource.load(KatLink(link.id, link.type, season ?: 1, episode ?: 1, link.title, link.year), "KatDrama", subs, links)
             }
+            sources += "KissKH" to { subs, links -> OmniStreamSites.kissKH(link, "KissKH", subs, links) }
+            sources += GOPLAY to { subs, links -> OmniStreamSites.goPlay(link, name, GOPLAY, subs, links) }
         }
         if (link.kind == OmniStreamParser.KIND_ANIME) {
             // Both AniList sources wait for the same lookup, which never holds up the TMDB-keyed ones.
@@ -308,14 +315,27 @@ class OmniStream : MainAPI() {
                     }
                 }
             }
+            sources += "Reanime" to { subs, links ->
+                target()?.let { found -> ReanimeSource.load(found.anilistId, 0, found.episode, listOf("sub", "dub"), "Reanime", subs, links) }
+            }
+            sources += "AnimeX" to { subs, links ->
+                target()?.let { found ->
+                    val slug = AnimeXSource.slug(found.anilistId) ?: return@let
+                    listOf("sub", "dub").amap { lang -> AnimeXSource.load(slug, found.episode, lang, "AnimeX", subs, links) }
+                }
+            }
         }
         return sources
     }
+
+    /** GoPlay links carry this API's name as their source, so the app asks here for what renews their spent URLs. */
+    override fun getVideoInterceptor(extractorLink: ExtractorLink): Interceptor = GoPlaySource.interceptor
 
     private fun image(path: String?, size: String): String? =
         path?.let { "https://image.tmdb.org/t/p/$size$it" }
 
     companion object {
+        private const val GOPLAY = "GoPlay"
         private const val TMDB_API = "https://api.themoviedb.org/3"
         private const val TMDB_MIRROR = "https://db.wecollege.net/3"
 

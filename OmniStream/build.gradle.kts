@@ -1,10 +1,10 @@
-version = 1
+version = 2
 
 cloudstream {
     authors = listOf("NropVox")
     language = "en"
     description =
-        "Movies, TV shows, anime and Asian dramas from TMDB. Every title is looked up on Dulo, Movy, 7Movies, TonkaCine and Cno.to at once (plus KatDrama for Asian titles, and AnimoTv and Ani.pm for anime through AniList); dead links are dropped and playback starts as soon as enough working ones are in."
+        "Movies, TV shows, anime and Asian dramas from TMDB. Every title is looked up on Dulo, Movy, 7Movies, TonkaCine, Cno.to, Vegamovies, MoviesMod and 4KHDHub at once (plus KatDrama, KissKH and GoPlay for Asian titles, and AnimoTv, Ani.pm, Reanime and AnimeX for anime through AniList); dead links are dropped and playback starts as soon as enough working ones are in."
 
     /**
      * Status int as the following:
@@ -20,6 +20,10 @@ cloudstream {
     isCrossPlatform = true
 }
 
-// The stream resolvers of the TMDB- and AniList-keyed plugins, compiled in so no other plugin has to be installed.
-listOf("dulosource", "movysource", "sevenmoviessource", "tonkacinesource", "cnotosource", "katdramasource", "animotvsource", "anipmsource")
+// The stream resolvers of the TMDB- and AniList-keyed plugins and of the title-searched sites (with the nexdrive host
+// chain two of them use), compiled in so no other plugin has to be installed.
+listOf(
+    "dulosource", "movysource", "sevenmoviessource", "tonkacinesource", "cnotosource", "katdramasource", "animotvsource", "anipmsource",
+    "nexdrive", "vegamoviessource", "moviesmodsource", "fourkhdhubsource", "kisskhsource", "goplaysource", "reanimesource", "animexsource",
+)
     .forEach { android.sourceSets.getByName("main").kotlin.srcDir("../shared/$it") }

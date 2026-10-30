@@ -24,11 +24,9 @@ import com.lagradost.cloudstream3.SearchResponseList
 import com.lagradost.cloudstream3.ShowStatus
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
-import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.addDate
 import com.lagradost.cloudstream3.addDubStatus
 import com.lagradost.cloudstream3.addEpisodes
-import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newAnimeLoadResponse
@@ -36,15 +34,10 @@ import com.lagradost.cloudstream3.newAnimeSearchResponse
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newSearchResponseList
-import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
-import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.getQualityFromName
-import com.lagradost.cloudstream3.utils.newExtractorLink
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URLEncoder
@@ -53,7 +46,8 @@ import java.util.Calendar
 /**
  * AnimeX (animex.one) is a SvelteKit site over two open APIs: GraphQL for catalog, search and details,
  * and the `pp` REST API for episodes and streams. Neither needs auth, cookies or tokens.
- * Titles are keyed by AniList ID in page URLs, but `pp` only accepts the GraphQL slug.
+ * Titles are keyed by AniList ID in page URLs, but `pp` only accepts the GraphQL slug. The stream calls are
+ * [AnimeXSource] in `shared/animexsource` (shared with OmniStream).
  */
 class AnimeX : MainAPI() {
     override var mainUrl = "https://animex.one"
@@ -63,11 +57,11 @@ class AnimeX : MainAPI() {
     override val hasQuickSearch = true
     override val supportedTypes = setOf(TvType.Anime, TvType.AnimeMovie, TvType.OVA)
 
-    private val graphqlUrl = "https://graphql.animex.one/graphql"
+    private val graphqlUrl = AnimeXSource.GRAPHQL
     private val recentUrl = "https://graphql.animex.one/api/recent"
     private val ppApi = "https://pp.animex.one/rest/api"
 
-    private val browserHeaders = mapOf("User-Agent" to USER_AGENT)
+    private val browserHeaders = AnimeXSource.browserHeaders
 
     // Site URLs end in the AniList ID: /anime/{slug}-{id} and /watch/{slug}-{id}-episode-{n}.
     private val anilistIdPattern = Regex("""-(\d+)(?:-episode-\d+)?$""")
@@ -267,50 +261,7 @@ class AnimeX : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val link = parseJson<LinkData>(data)
-        val episodeQuery = "id=${encode(link.slug)}&epNum=${link.episode}"
-        val servers = fetch<Servers>("$ppApi/servers?$episodeQuery")
-        val providers = (if (link.lang == "dub") servers?.dubProviders else servers?.subProviders)
-            .orEmpty().mapNotNull { it.id }.ifEmpty { FALLBACK_PROVIDERS }
-
-        val seenSubtitles = mutableSetOf<String>()
-        val subtitleLabels = mutableMapOf<String, Int>()
-        var found = false
-
-        // Providers fail independently (nero has been returning 403 upstream), so try them all.
-        providers.amap { provider ->
-            val sources = fetch<Sources>("$ppApi/sources?$episodeQuery&type=${link.lang}&providerId=${encode(provider)}")
-                ?: return@amap
-            // Each provider's media hosts check for the Referer of the embed it was scraped from.
-            val mediaHeaders = browserHeaders + sources.headers.orEmpty()
-            val label = "$name ${provider.replaceFirstChar { it.uppercase() }} ${link.lang.uppercase()}"
-
-            for (source in sources.sources.orEmpty()) {
-                val url = source.url ?: continue
-                val isHls = source.type?.contains("mpegurl", ignoreCase = true) == true || url.contains(".m3u8")
-                // Segments sit behind fake .jpg/.html/.js names, so let the player probe the playlist.
-                callback(newExtractorLink(label, label, url, if (isHls) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO) {
-                    referer = sources.headers?.get("Referer") ?: ""
-                    quality = source.quality?.let { getQualityFromName(it) } ?: Qualities.Unknown.value
-                    headers = mediaHeaders
-                })
-                found = true
-            }
-
-            for (track in sources.tracks.orEmpty()) {
-                val url = track.url ?: continue
-                // Storyboard and thumbnail VTTs share the list with captions.
-                if (track.kind != null && track.kind != "captions" && track.kind != "subtitles") continue
-                val trackLabel = synchronized(seenSubtitles) {
-                    if (!seenSubtitles.add(url)) return@synchronized null
-                    val base = track.label?.takeIf { it.isNotBlank() } ?: track.lang?.takeIf { it.isNotBlank() } ?: "Unknown"
-                    val count = (subtitleLabels[base] ?: 0) + 1
-                    subtitleLabels[base] = count
-                    if (count == 1) base else "$base $count"
-                } ?: continue
-                subtitleCallback(newSubtitleFile(trackLabel, url) { headers = mediaHeaders })
-            }
-        }
-        return found
+        return AnimeXSource.load(link.slug, link.episode, link.lang, name, subtitleCallback, callback)
     }
 
     private suspend inline fun <reified T> graphql(query: String, variables: Map<String, Any?>): T? {
@@ -350,7 +301,6 @@ class AnimeX : MainAPI() {
         // GraphQL allows 30 requests a minute; 24 matches the site's own page size.
         private const val PAGE_SIZE = 24
         private const val QUICK_SEARCH_SIZE = 8
-        private val FALLBACK_PROVIDERS = listOf("yuki")
 
         private const val CARD_FIELDS =
             "id anilistId titleEnglish titleRomaji coverImage format seasonYear averageScore subCount dubCount"
@@ -485,24 +435,5 @@ class AnimeX : MainAPI() {
         val airDateUtc: String? = null,
         val hasSub: Boolean? = null,
         val hasDub: Boolean? = null,
-    )
-
-    data class Provider(val id: String? = null)
-
-    data class Servers(val subProviders: List<Provider>? = null, val dubProviders: List<Provider>? = null)
-
-    data class Source(val url: String? = null, val quality: String? = null, val type: String? = null)
-
-    data class Track(
-        val url: String? = null,
-        val lang: String? = null,
-        val label: String? = null,
-        val kind: String? = null,
-    )
-
-    data class Sources(
-        val sources: List<Source>? = null,
-        val tracks: List<Track>? = null,
-        val headers: Map<String, String>? = null,
     )
 }

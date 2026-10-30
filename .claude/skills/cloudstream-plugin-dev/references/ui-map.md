@@ -64,3 +64,9 @@ with `ui` / `tap` / `swipe`. View ids are stable across portrait and landscape; 
 - **`sources` can also open "Video tracks"** for a single HLS master (it lists resolutions like `1920x1080`, `854x480`). The real Source dialog has a "Sources" and a "Subtitles" heading; open it by hand as above.
 - **`play N` can report "episode N not found" in landscape** when the result page already scrolled past it, or when the episode list sits below the fold. `swipe 900 900 900 300 400`, `ui | grep episode_text`, then `tap "Episode N" --exact`. Its own scrolling can also open a different episode than N, so check the title in `links` (found with AnimeFlix, 2026-10-29).
 - **A season's episode list appears only after `result_season_button`** is scrolled into view. Tap it, then `tap "Season 2" --exact`.
+- **Player Source button moves.** With subtitles offered, the bottom bar is Lock/Resize/Sync subs/Source (Source ≈ x 1430);
+  without, it is Lock/Resize/Source (≈ x 1260), and `sources` can fail to open the dialog. Controls auto-hide before a
+  2 s `ui` dump, so tap the player, `shot`, then `tapxy` Source while they show. For a per-source picture of `loadLinks`,
+  a temporary `Log.i` per emitted link and per-source elapsed time beats scrolling the dialog.
+- **`provider` scroll can skip a row** (seen: JavStream between JavHD and Javtiful). If it says "not in the picker" but the
+  chip is ticked, open the picker, `swipe 953 800 953 500` and `tap` the row yourself.

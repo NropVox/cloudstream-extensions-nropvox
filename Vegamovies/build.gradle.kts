@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 cloudstream {
     authors = listOf("NropVox")
@@ -11,3 +11,6 @@ cloudstream {
 
 // The nexdrive host resolvers are shared with XPrimeHub.
 android.sourceSets.getByName("main").kotlin.srcDir("../shared/nexdrive")
+
+// The Vegamovies search and link chain is shared with OmniStream.
+android.sourceSets.getByName("main").kotlin.srcDir("../shared/vegamoviessource")

@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 cloudstream {
     authors = listOf("NropVox")
@@ -10,3 +10,6 @@ cloudstream {
 
     isCrossPlatform = true
 }
+
+// The MoviesMod gate and DriveSeed chain is shared with OmniStream.
+android.sourceSets.getByName("main").kotlin.srcDir("../shared/moviesmodsource")

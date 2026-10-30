@@ -1,6 +1,5 @@
 package com.nropvox
 
-import com.lagradost.api.Log
 import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
@@ -18,23 +17,17 @@ import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newSearchResponseList
-import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.newTvSeriesLoadResponse
 import com.lagradost.cloudstream3.newTvSeriesSearchResponse
-import com.lagradost.cloudstream3.runAllAsync
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
-import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.loadExtractor
-import com.lagradost.cloudstream3.utils.newExtractorLink
-import java.net.URLEncoder
 
 /**
  * kisskh.ovh: an Angular SPA over its own JSON API (`/api/DramaList/...`). Streams are the site's HLS on
  * cdnvideo11.shop with no headers; the episode and subtitle endpoints need a `kkey` computed from the episode id.
+ * Those calls are [KissKHSource] in `shared/kisskhsource` (shared with OmniStream).
  */
 class KissKH : MainAPI() {
-    override var mainUrl = "https://kisskh.ovh"
+    override var mainUrl = KissKHSource.SITE
     override var name = "KissKH"
     override val hasMainPage = true
     override var lang = "en"
@@ -70,8 +63,7 @@ class KissKH : MainAPI() {
     /** The search endpoint returns every match at once. */
     override suspend fun search(query: String, page: Int): SearchResponseList {
         if (page > 1 || query.isBlank()) return newSearchResponseList(emptyList(), hasNext = false)
-        val encoded = URLEncoder.encode(query.trim(), "UTF-8")
-        val items = app.get("$api/Search?q=$encoded&type=0").parsedSafe<Array<KissCard>>().orEmpty()
+        val items = KissKHSource.search(query)
         return newSearchResponseList(items.mapNotNull { it.toSearchResponse() }, hasNext = false)
     }
 
@@ -86,7 +78,7 @@ class KissKH : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse {
         val id = KissKHParser.dramaId(url) ?: throw ErrorLoadingException("No drama id in $url")
-        val drama = app.get("$api/Drama/$id?isq=false").parsedSafe<KissDrama>()
+        val drama = KissKHSource.drama(id)
             ?: throw ErrorLoadingException("kisskh returned no details for $id")
         val title = drama.title?.trim().orEmpty().ifEmpty { "kisskh $id" }
         val pageUrl = KissKHParser.dramaUrl(mainUrl, title, id)
@@ -131,46 +123,6 @@ class KissKH : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val episodeId = KissKHParser.episodeId(data) ?: return false
-        var found = false
-        runAllAsync(
-            { if (loadVideo(episodeId, subtitleCallback, callback)) found = true },
-            { loadSubtitles(episodeId, subtitleCallback) },
-        )
-        return found
-    }
-
-    private suspend fun loadVideo(
-        episodeId: Int,
-        subtitleCallback: (SubtitleFile) -> Unit,
-        callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val kkey = KissKHParser.kkey(episodeId, KissKHParser.VIDEO_GUID)
-        val video = app.get("$api/Episode/$episodeId.png?err=false&ts=null&time=null&kkey=$kkey")
-            .parsedSafe<KissVideo>()
-        val url = video?.video?.trim()?.let { if (it.startsWith("//")) "https:$it" else it }
-        if (url.isNullOrEmpty()) {
-            Log.w(name, "episode $episodeId: no video (thirdParty=${video?.thirdParty})")
-            return false
-        }
-        if (video.type == 2) return loadExtractor(url, "$mainUrl/", subtitleCallback, callback)
-        // Fresh episodes have `.PNG` segments (MPEG-TS inside), so the playlist goes to the player as-is.
-        val isHls = video.type == 1 || ".m3u8" in url
-        callback(
-            newExtractorLink(name, name, url, if (isHls) ExtractorLinkType.M3U8 else ExtractorLinkType.VIDEO) {
-                quality = Qualities.Unknown.value
-            }
-        )
-        return true
-    }
-
-    /** `.srt` tracks are plain; `.txt`/`.txt1` ones have encrypted cues and are served decrypted over loopback. */
-    private suspend fun loadSubtitles(episodeId: Int, subtitleCallback: (SubtitleFile) -> Unit) {
-        val kkey = KissKHParser.kkey(episodeId, KissKHParser.SUB_GUID)
-        val subtitles = app.get("$mainUrl/api/Sub/$episodeId?kkey=$kkey").parsedSafe<Array<KissSubtitle>>().orEmpty()
-        for (subtitle in subtitles) {
-            val src = subtitle.src?.trim()?.takeIf { it.startsWith("https://") } ?: continue
-            val url = if (KissKHParser.isEncryptedSubtitle(src)) KissKHLocalServer.subtitleUrl(src) else src
-            subtitleCallback(newSubtitleFile(subtitle.label ?: subtitle.land ?: "Unknown", url))
-        }
+        return KissKHSource.loadEpisode(episodeId, name, subtitleCallback, callback)
     }
 }

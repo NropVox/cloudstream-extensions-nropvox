@@ -20,7 +20,6 @@ import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.addDate
 import com.lagradost.cloudstream3.addDubStatus
 import com.lagradost.cloudstream3.addEpisodes
-import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
 import com.lagradost.cloudstream3.newAnimeLoadResponse
@@ -29,21 +28,19 @@ import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
 import com.lagradost.cloudstream3.newSearchResponseList
-import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.ExtractorLinkType
-import com.lagradost.cloudstream3.utils.newExtractorLink
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * reanime.to is a SvelteKit site over its own JSON API under `/api/v1/`. Streams come from the embedded
  * `flixcloud.cc` player: `/api/flix/{anilist}/{ep}` lists its embeds, whose page carries an encrypted master URL
- * that [ReanimeParser.decodeEmbed] unlocks. Sub and dub are audio renditions of one HLS master.
+ * that [ReanimeParser.decodeEmbed] unlocks. Sub and dub are audio renditions of one HLS master. The player chain is
+ * [ReanimeSource] in `shared/reanimesource` (shared with OmniStream).
  */
 class Reanime : MainAPI() {
-    override var mainUrl = "https://reanime.to"
+    override var mainUrl = ReanimeSource.SITE
     override var name = "Reanime"
     override var lang = "en"
     override val hasMainPage = true
@@ -189,43 +186,7 @@ class Reanime : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         val watch = ReanimeParser.parseWatchUrl(data) ?: return false
-        val flix = tryParseJson<RaFlix>(app.get(mainUrl + ReanimeParser.flixPath(watch.anilistId, watch.malId, watch.episode)).text)
-        // Sub and dub share an embed; what differs per server is only where it is hosted.
-        val embeds = flix?.servers.orEmpty().filter { !it.dataLink.isNullOrBlank() }
-            .distinctBy { it.serverName to it.dataLink }
-        if (embeds.isEmpty()) return false
-
-        val dub = watch.lang == "dub"
-        var found = false
-        var subtitlesSent = false
-        embeds.amap { server ->
-            runCatching {
-                val embedUrl = server.dataLink!!
-                val html = app.get(embedUrl, referer = "$mainUrl/").text
-                val embed = ReanimeParser.parseEmbed(html)
-                val tokenJson = app.get("https://flixcloud.cc/api/m3u8/${embed.token}", referer = embedUrl).text
-                val decoded = ReanimeParser.decodeEmbed(embed, tokenJson)
-                val masterBody = app.get(decoded.masterUrl, referer = ReanimeParser.FLIX_REFERER).text
-                val master = ReanimeParser.unmaskPlaylist(masterBody, decoded.pk)
-                if (!master.startsWith("#EXTM3U")) throw IllegalStateException("Master playlist did not unmask")
-
-                val session = ReanimeLocalServer.session(decoded.pk)
-                val playlist = ReanimeParser.rewriteMaster(master, decoded.masterUrl, if (dub) "eng" else "jpn", session::proxy)
-                val label = "$name ${server.serverName ?: "Server"} ${if (dub) "DUB" else "SUB"}"
-                callback(newExtractorLink(label, label, ReanimeLocalServer.publish(session, playlist), ExtractorLinkType.M3U8) {
-                    referer = ReanimeParser.FLIX_REFERER
-                    headers = mapOf("Referer" to ReanimeParser.FLIX_REFERER)
-                    quality = ReanimeParser.topHeight(master) ?: 0
-                })
-                found = true
-
-                if (!subtitlesSent) {
-                    subtitlesSent = true
-                    for (subtitle in embed.subtitles) subtitleCallback(newSubtitleFile(subtitle.language, subtitle.url))
-                }
-            }.onFailure { Log.w(name, "${server.serverName} for ${watch.slug} ep ${watch.episode}: $it") }
-        }
-        return found
+        return ReanimeSource.load(watch.anilistId, watch.malId, watch.episode, listOf(watch.lang), name, subtitleCallback, callback)
     }
 
     private fun RaCard.toSearchResponse(): SearchResponse? {

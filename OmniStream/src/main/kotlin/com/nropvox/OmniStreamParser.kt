@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 
-/** Pure logic for OmniStream: title kinds, the TMDB → AniList episode mapping, playlist checks and the finish policy. */
+/**
+ * Pure logic for OmniStream: title kinds, the TMDB → AniList episode mapping, matching TMDB titles to site search
+ * hits, playlist checks and the finish policy.
+ */
 object OmniStreamParser {
     private val mapper = jacksonObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
@@ -145,6 +148,73 @@ object OmniStreamParser {
         val uri = lines.drop(inf + 1).firstOrNull { it.isNotEmpty() && !it.startsWith("#") } ?: return null
         return runCatching { java.net.URI(playlistUrl).resolve(uri).toString() }.getOrNull()
     }
+
+    // --- Title-searched sites ---
+
+    /** A site's search hit, reduced to what matching needs. [label] is the raw post title, read for season mentions. */
+    data class SiteHit<T>(
+        val item: T,
+        val title: String,
+        val year: Int?,
+        val imdbId: String? = null,
+        val series: Boolean? = null,
+        val label: String = title,
+    )
+
+    /**
+     * The hits that are this title, best first. The IMDb id decides when both sides have one; otherwise the name must
+     * be one of [names] and the year within one of [years] (a hit or title without a year passes). A hit that says
+     * whether it is a series must agree. For a [season], posts that name only other seasons are dropped and posts
+     * naming it come first.
+     */
+    fun <T> matches(hits: List<SiteHit<T>>, names: List<String>, years: List<Int>, imdbId: String?, series: Boolean, season: Int?): List<T> =
+        hits.filter { hit ->
+            if (hit.series != null && hit.series != series) return@filter false
+            if (!imdbId.isNullOrBlank() && !hit.imdbId.isNullOrBlank()) hit.imdbId.equals(imdbId, ignoreCase = true)
+            else sameTitle(hit.title, names) && yearMatches(hit.year, years)
+        }.map { it to (season?.let { s -> seasonRank(it.label, s) } ?: 0) }
+            .filter { it.second < 2 }
+            .sortedBy { it.second }
+            .map { it.first.item }
+
+    fun sameTitle(candidate: String, names: List<String>): Boolean {
+        val wanted = normalizeTitle(candidate)
+        return wanted.isNotEmpty() && names.any { normalizeTitle(it) == wanted }
+    }
+
+    /** Sites date a title by another country's release or by its first season, so a year either way still matches. */
+    fun yearMatches(year: Int?, years: List<Int>): Boolean =
+        year == null || years.isEmpty() || years.any { kotlin.math.abs(it - year) <= 1 }
+
+    /** Letters and digits only, accents dropped and `&` read as "and", so site spellings of one name compare equal. */
+    fun normalizeTitle(value: String): String =
+        java.text.Normalizer.normalize(value.replace("&", " and "), java.text.Normalizer.Form.NFD)
+            .lowercase().filter { it.isLetterOrDigit() }
+
+    /** Names a site may give a season: season 1 often has no number, later ones add "Season N" or just N. */
+    fun seasonNames(names: List<String>, season: Int?): List<String> = when (season) {
+        null -> names
+        1 -> names + names.map { "$it Season 1" }
+        else -> names.flatMap { listOf("$it Season $season", "$it $season") }
+    }
+
+    private val seasonRange = Regex("""\b(?:Seasons?|S)\s*0*(\d{1,2})\s*(?:[-–&]|to)\s*(?:Season\s*|S)?0*(\d{1,2})\b""", RegexOption.IGNORE_CASE)
+    private val seasonSingle = Regex("""\b(?:Season\s*|S)0*(\d{1,2})(?!\d)""", RegexOption.IGNORE_CASE)
+
+    /** 0: [label] names [season] (alone or in a range), 1: it names no season, 2: it names only other seasons. */
+    fun seasonRank(label: String, season: Int): Int {
+        val ranges = seasonRange.findAll(label).map { it.groupValues[1].toInt()..it.groupValues[2].toInt() }.toList()
+        if (ranges.any { season in it }) return 0
+        val singles = seasonSingle.findAll(seasonRange.replace(label, " ")).map { it.groupValues[1].toInt() }.toList()
+        if (season in singles) return 0
+        return if (ranges.isEmpty() && singles.isEmpty()) 1 else 2
+    }
+
+    private val trailingYear = Regex("""\s*\((\d{4})\)\s*$""")
+
+    /** `Poisonous Love (2025)` → (`Poisonous Love`, 2025): KissKH tells remakes apart by a year after the name. */
+    fun splitYear(title: String): Pair<String, Int?> =
+        trailingYear.find(title)?.let { title.substring(0, it.range.first).trim() to it.groupValues[1].toInt() } ?: (title.trim() to null)
 
     // --- Finish policy ---
 

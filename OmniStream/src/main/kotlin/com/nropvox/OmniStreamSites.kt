@@ -97,6 +97,8 @@ internal object OmniStreamSites {
             val single = if (!link.series) link else if (link.totalSeasons == 1) link.copy(season = 1) else null
             listOfNotNull<suspend () -> Unit>(
                 { fourKHDHubFiles(link) },
+                // A show's search names the episode, so only the session is readied for it.
+                { if (link.series) MkvBaseSource.warm() else mkvBaseResults(link) },
                 single?.let { { vegamoviesPages(it) } },
                 single?.let { { moviesModSources(it) } },
                 single?.takeIf { it.kind == OmniStreamParser.KIND_ASIAN }?.let { { kissKHEpisodes(it) } },
@@ -200,6 +202,31 @@ internal object OmniStreamSites {
                     FourKHDHubParser.movieFiles(doc).map { FkEpisode(0, 0, it) }
                 }
             }.filterNotNull().flatten().ifEmpty { null }
+        }
+
+    suspend fun mkvBase(link: OmniLink, name: String, callback: (ExtractorLink) -> Unit) {
+        val results = mkvBaseResults(link) ?: return
+        MkvBaseSource.loadLinks(results, name, callback)
+    }
+
+    /**
+     * The site's full-text search needs every word: a movie is asked with its year (results stop at 50), an episode
+     * by both of its release spellings (`S02E04`, and `S01 E03` under the season's name).
+     */
+    private suspend fun mkvBaseResults(link: OmniLink) =
+        cached("${link.key("mkvbase")}:${link.episode ?: 0}") {
+            val title = MkvBaseParser.query(link.title)
+            val queries = if (link.series) listOf("$title S%02dE%02d".format(link.season, link.episode), "$title S%02d".format(link.season))
+            else listOfNotNull(link.year?.let { "$title $it" }, title)
+            val season = link.season.takeIf { link.series }
+            val episode = link.episode.takeIf { link.series }
+            var found = emptyList<MkvBaseResult>()
+            for (query in queries) {
+                found = (found + MkvBaseParser.matches(MkvBaseSource.search(query), link.names, link.years, season, episode)).distinctBy { it.url }
+                // A movie's year query is the narrower one; the bare title is only asked when it found nothing.
+                if (!link.series && found.isNotEmpty()) break
+            }
+            found.ifEmpty { null }
         }
 
     suspend fun kissKH(link: OmniLink, name: String, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {

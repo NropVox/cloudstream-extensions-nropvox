@@ -37,8 +37,8 @@ import java.net.URLEncoder
 /**
  * OmniStream: a TMDB catalog (movies, shows, anime, Asian drama) whose links come from every TMDB-keyed source in
  * this repo at once (Dulo, Movy, 7Movies, TonkaCine, Cno.to, plus KatDrama for Asian titles), the sites it finds the
- * title on by search ([OmniStreamSites]: Vegamovies, MoviesMod, 4KHDHub, plus KissKH and GoPlay for Asian titles),
- * and for anime also the AniList-keyed AnimoTv, Ani.pm, Reanime and AnimeX after a TMDB → AniList lookup. Their
+ * title on by search ([OmniStreamSites]: Vegamovies, MoviesMod, 4KHDHub, MkvBase, plus KissKH and GoPlay for Asian
+ * titles), and for anime also the AniList-keyed AnimoTv, Ani.pm, Reanime and AnimeX after a TMDB → AniList lookup. Their
  * resolvers are compiled in from `shared/`, and [OmniLinkRace] runs them in parallel against a deadline. Titles with
  * an IMDb id also get Vadapav's files and OpenSubtitles' subtitles from their Stremio addons ([OmniStremio]).
  */
@@ -262,6 +262,7 @@ class OmniStream : MainAPI() {
             "Vegamovies" to { _, links -> find()?.let { link -> OmniStreamSites.vegamovies(link, "Vegamovies", links) } },
             "MoviesMod" to { _, links -> find()?.let { link -> OmniStreamSites.moviesMod(link, "MoviesMod", links) } },
             "4KHDHub" to { _, links -> find()?.let { link -> OmniStreamSites.fourKHDHub(link, "4KHDHub", links) } },
+            "MkvBase" to { _, links -> find()?.let { link -> OmniStreamSites.mkvBase(link, "MkvBase", links) } },
             // Both skip titles without an IMDb id.
             "Vadapav" to { _, links -> find()?.let { link -> OmniStremio.streams(OmniStremio.VADAPAV, link, "Vadapav", links) } },
             "OpenSubtitles" to { subs, _ -> find()?.let { link -> OmniStremio.subtitles(OmniStremio.OPENSUBTITLES, link, subs) } },

@@ -37,13 +37,15 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.Interceptor
 import java.net.URLEncoder
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * OmniStream: a TMDB catalog (movies, shows, anime, Asian drama) whose links come from every TMDB-keyed source in
  * this repo at once (Dulo, Movy, 7Movies, TonkaCine, Cno.to, plus KatDrama for Asian titles), the sites it finds the
  * title on by search ([OmniStreamSites]: Vegamovies, MoviesMod, 4KHDHub, plus KissKH and GoPlay for Asian titles),
  * and for anime also the AniList-keyed AnimoTv, Ani.pm, Reanime and AnimeX after a TMDB → AniList lookup. Their
- * resolvers are compiled in from `shared/`, and [OmniLinkRace] runs them in parallel against a deadline.
+ * resolvers are compiled in from `shared/`, and [OmniLinkRace] runs them in parallel against a deadline. Titles with
+ * an IMDb id also get Vadapav's files and OpenSubtitles' subtitles from their Stremio addons ([OmniStremio]).
  */
 class OmniStream : MainAPI() {
     override var mainUrl = "https://www.themoviedb.org"
@@ -68,11 +70,21 @@ class OmniStream : MainAPI() {
 
     /**
      * TMDB through the public API with a site key; when that key is refused (or the API is unreachable), the keyless
-     * TMDB mirror Movy uses. Null for a missing title.
+     * TMDB mirror Movy uses. Null for a missing title. Answers are kept for [TMDB_TTL_MS], so reopening a title or
+     * playing its episodes doesn't ask again.
      */
     private suspend fun tmdb(path: String): String? {
         val separator = if ('?' in path) '&' else '?'
         val query = "$path${separator}language=en-US&include_adult=false"
+        val now = System.currentTimeMillis()
+        tmdbCache[query]?.let { (at, body) -> if (now - at < TMDB_TTL_MS) return body }
+        return fetchTmdb(query)?.also {
+            if (tmdbCache.size >= TMDB_CACHE_SIZE) tmdbCache.clear()
+            tmdbCache[query] = now to it
+        }
+    }
+
+    private suspend fun fetchTmdb(query: String): String? {
         if (!keyRefused) {
             try {
                 val response = app.get("$TMDB_API/$query&api_key=$TMDB_KEY", timeout = 20L)
@@ -288,6 +300,10 @@ class OmniStream : MainAPI() {
             "MoviesMod" to { _, links -> OmniStreamSites.moviesMod(link, "MoviesMod", links) },
             "4KHDHub" to { _, links -> OmniStreamSites.fourKHDHub(link, "4KHDHub", links) },
         )
+        if (link.imdbId != null) {
+            sources += "Vadapav" to { _, links -> OmniStremio.streams(OmniStremio.VADAPAV, link, "Vadapav", links) }
+            sources += "OpenSubtitles" to { subs, _ -> OmniStremio.subtitles(OmniStremio.OPENSUBTITLES, link, subs) }
+        }
         if (link.kind == OmniStreamParser.KIND_ASIAN) {
             sources += "KatDrama" to { subs, links ->
                 KatDramaSource.load(KatLink(link.id, link.type, season ?: 1, episode ?: 1, link.title, link.year), "KatDrama", subs, links)
@@ -351,5 +367,11 @@ class OmniStream : MainAPI() {
 
         @Volatile
         private var keyRefused = false
+
+        private const val TMDB_TTL_MS = 30 * 60 * 1000L
+        private const val TMDB_CACHE_SIZE = 100
+
+        /** TMDB answers by query, with when they were fetched. */
+        private val tmdbCache = ConcurrentHashMap<String, Pair<Long, String>>()
     }
 }

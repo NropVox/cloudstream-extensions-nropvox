@@ -17,14 +17,18 @@ import java.util.Collections
 object FourKHDHubSource {
     const val SITE = "https://4khdhub.one"
 
+    /** Where search goes: [SITE], unless a plugin learned the current domain at runtime. */
+    @Volatile
+    var site = SITE
+
     private val hosts = NexdriveResolver("4KHDHub")
 
     /** Cards of one page of `/?s=`. */
     suspend fun search(query: String, page: Int = 1): Pair<List<FkCard>, Boolean> {
         val q = URLEncoder.encode(query.trim(), "UTF-8")
-        val url = if (page <= 1) "$SITE/?s=$q" else "$SITE/page/$page/?s=$q"
+        val url = if (page <= 1) "$site/?s=$q" else "$site/page/$page/?s=$q"
         val doc = app.get(url, timeout = 30L).document
-        val cards = FourKHDHubParser.cards(doc, SITE)
+        val cards = FourKHDHubParser.cards(doc, site)
         return cards to (cards.isNotEmpty() && FourKHDHubParser.hasNext(doc))
     }
 

@@ -226,6 +226,81 @@ object OmniStreamParser {
         return day <= today + DATE_SLACK_DAYS
     }
 
+    // --- Stremio addons ---
+
+    /** An addon's id for a title: the IMDb id, with `:season:episode` for an episode. */
+    fun stremioId(imdbId: String, season: Int?, episode: Int?): String =
+        if (season != null && episode != null) "$imdbId:$season:$episode" else imdbId
+
+    /** One direct stream of an addon. [label] is the file name and size; [height] is null when nothing names it. */
+    data class StremioStream(val url: String, val label: String, val height: Int?, val headers: Map<String, String>)
+
+    private val streamHeight = Regex("""(?i)\b(2160|1440|1080|720|576|480|360)p\b""")
+    private val uhd = Regex("""(?i)\b(4k|uhd)\b""")
+    private val fileSize = Regex("""(?i)\b\d+(?:\.\d+)?\s*[GM]B\b""")
+
+    /**
+     * The direct streams of a `/stream/...json` answer. Torrent-only entries (an `infoHash`, no `url`) can't be played
+     * here and are left out. The title is the file name, sometimes followed by its size on the next line.
+     */
+    fun stremioStreams(json: String): List<StremioStream> {
+        val streams = runCatching { mapper.readTree(json) }.getOrNull()?.get("streams") ?: return emptyList()
+        return streams.mapNotNull { stream ->
+            val url = stream.get("url")?.asText()?.takeIf { it.startsWith("http") } ?: return@mapNotNull null
+            val name = stream.get("name")?.asText().orEmpty()
+            val title = (stream.get("title") ?: stream.get("description"))?.asText().orEmpty()
+            val hints = stream.get("behaviorHints")
+            val file = hints?.get("filename")?.asText() ?: title.lineSequence().firstOrNull()?.trim().orEmpty()
+            val size = fileSize.find(title)?.value
+            val text = "$name $title"
+            val height = streamHeight.find(text)?.groupValues?.get(1)?.toInt() ?: if (uhd.containsMatchIn(text)) 2160 else null
+            val headers = hints?.get("proxyHeaders")?.get("request")?.fields()?.asSequence()
+                ?.associate { (key, value) -> key to value.asText() }.orEmpty()
+            StremioStream(url, listOf(file, size).filterNot { it.isNullOrBlank() }.joinToString(" · ").ifEmpty { name }, height, headers)
+        }
+    }
+
+    data class StremioSubtitle(val lang: String, val url: String)
+
+    /** The subtitles of a `/subtitles/...json` answer, at most [perLanguage] of each language, in the addon's order. */
+    fun stremioSubtitles(json: String, perLanguage: Int): List<StremioSubtitle> {
+        val subtitles = runCatching { mapper.readTree(json) }.getOrNull()?.get("subtitles") ?: return emptyList()
+        val counts = HashMap<String, Int>()
+        return subtitles.mapNotNull { subtitle ->
+            val url = subtitle.get("url")?.asText()?.takeIf { it.startsWith("http") } ?: return@mapNotNull null
+            val lang = subtitle.get("lang")?.asText()?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val count = counts.getOrDefault(lang, 0)
+            if (count >= perLanguage) return@mapNotNull null
+            counts[lang] = count + 1
+            StremioSubtitle(lang, url)
+        }
+    }
+
+    /** OpenSubtitles' own codes for regional variants, which no ISO 639 table knows. */
+    fun openSubtitlesLanguage(code: String): String? = when (code) {
+        "pob" -> "Portuguese (Brazil)"
+        "spl" -> "Spanish (Latin America)"
+        "spn" -> "Spanish (Spain)"
+        "zht" -> "Chinese (Traditional)"
+        "zhe" -> "Chinese (Bilingual)"
+        "mne" -> "Montenegrin"
+        else -> null
+    }
+
+    // --- Site domains ---
+
+    private val origin = Regex("""^https://[a-z0-9-]+(?:\.[a-z0-9-]+)+$""")
+
+    /**
+     * The site [key] names in a domains list (`{"vegamovies": "https://…", …}`, keys in any case), when it is a plain
+     * https origin; anything else (a path, another scheme) is ignored so a bad entry can't redirect a source.
+     */
+    fun domain(json: String, key: String): String? {
+        val tree = runCatching { mapper.readTree(json) }.getOrNull() ?: return null
+        val value = tree.fields().asSequence().firstOrNull { it.key.equals(key, ignoreCase = true) }?.value?.asText() ?: return null
+        return value.trim().trimEnd('/').lowercase().takeIf { origin.matches(it) }
+    }
+
     // --- Finish policy ---
 
     /** Enough to stop waiting (after a short grace): a few working links from more than one source, or plenty from one. */

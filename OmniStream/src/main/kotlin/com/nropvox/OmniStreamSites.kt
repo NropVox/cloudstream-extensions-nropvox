@@ -1,17 +1,21 @@
 package com.nropvox
 
+import com.lagradost.api.Log
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.nropvox.OmniStreamParser.SiteHit
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The sources that are found by searching the site for the title: each matches the TMDB title against the site's
  * hits ([OmniStreamParser.matches]), checks the IMDb or TMDB id where the site's page shows one, then plays the
  * episode through the site's own resolver from `shared/`. What a title resolved to is kept for the session, so the
- * next episode skips the search.
+ * next episode skips the search. The sites rotate their domains, so each search first picks up the current one
+ * ([domains]).
  */
 internal object OmniStreamSites {
     private const val TAG = "OmniStream"
@@ -21,6 +25,33 @@ internal object OmniStreamSites {
     private const val CACHE_SIZE = 200
 
     private val cache = ConcurrentHashMap<String, Any>()
+
+    /** StreamPlay's maintained list of these sites' current domains. */
+    private const val DOMAINS = "https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json"
+    private const val DOMAINS_TTL_MS = 60 * 60 * 1000L
+
+    private val domainsLock = Mutex()
+
+    @Volatile
+    private var domainsRead = 0L
+
+    /**
+     * Points the site sources at the domains the list names, at most once an hour; every source waits for the same
+     * request. A source keeps its built-in domain when the list can't be read or has no usable entry for it.
+     */
+    private suspend fun domains() {
+        if (System.currentTimeMillis() - domainsRead < DOMAINS_TTL_MS) return
+        domainsLock.withLock {
+            if (System.currentTimeMillis() - domainsRead < DOMAINS_TTL_MS) return
+            val json = safely(TAG, "domains") { app.get(DOMAINS, timeout = 6L).takeIf { it.isSuccessful }?.text }
+            domainsRead = System.currentTimeMillis()
+            if (json == null) return
+            OmniStreamParser.domain(json, "vegamovies")?.let { VegamoviesSource.site = it }
+            OmniStreamParser.domain(json, "moviesmod")?.let { MoviesModSource.site = it }
+            OmniStreamParser.domain(json, "4khdhub")?.let { FourKHDHubSource.site = it }
+            Log.i(TAG, "Domains: ${VegamoviesSource.site}, ${MoviesModSource.site}, ${FourKHDHubSource.site}")
+        }
+    }
 
     @Suppress("UNCHECKED_CAST")
     private suspend fun <T : Any> cached(key: String, find: suspend () -> T?): T? {
@@ -41,11 +72,12 @@ internal object OmniStreamSites {
 
     suspend fun vegamovies(link: OmniLink, name: String, callback: (ExtractorLink) -> Unit) {
         val pages = cached(link.key("vegamovies")) {
+            domains()
             val hits = VegamoviesSource.search(link.title)?.hits.orEmpty().mapNotNull { hit ->
                 val doc = hit.document ?: return@mapNotNull null
                 val raw = doc.title ?: return@mapNotNull null
                 val permalink = doc.permalink ?: return@mapNotNull null
-                SiteHit(VegamoviesSource.SITE + permalink, VegamoviesParser.cleanTitle(raw), VegamoviesParser.year(raw),
+                SiteHit(VegamoviesSource.site + permalink, VegamoviesParser.cleanTitle(raw), VegamoviesParser.year(raw),
                     doc.imdbId, VegamoviesParser.isSeries(raw), raw)
             }
             val urls = OmniStreamParser.matches(hits, link.names, link.years, link.imdbId, link.series, link.season)
@@ -64,6 +96,7 @@ internal object OmniStreamSites {
 
     suspend fun moviesMod(link: OmniLink, name: String, callback: (ExtractorLink) -> Unit) {
         val sources = cached(link.key("moviesmod")) {
+            domains()
             val doc = MoviesModSource.search(link.title) ?: return@cached null
             val hits = MoviesModParser.cards(doc).map { card ->
                 SiteHit(card.url, MoviesModParser.cleanTitle(card.title), MoviesModParser.year(card.title),
@@ -89,6 +122,7 @@ internal object OmniStreamSites {
     suspend fun fourKHDHub(link: OmniLink, name: String, callback: (ExtractorLink) -> Unit) {
         // A series page lists every season, so the whole show is kept, not one season.
         val files = cached("4khdhub:${link.type}:${link.id}") {
+            domains()
             val (cards, _) = FourKHDHubSource.search(link.title)
             val hits = cards.map { SiteHit(it.url, it.title, it.year, series = it.series) }
             val urls = OmniStreamParser.matches(hits, link.names, link.years, null, link.series, null)

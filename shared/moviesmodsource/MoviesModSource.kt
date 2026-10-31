@@ -28,14 +28,18 @@ import java.util.concurrent.TimeUnit
  */
 object MoviesModSource {
     // The site rotates its domain; the modpro, gate and DriveSeed hosts are always read from the page links.
-    const val SITE = "https://moviesmod.meme"
+    const val SITE = "https://moviesmod.tw"
+
+    /** Where search goes: [SITE], unless a plugin learned the current domain at runtime. */
+    @Volatile
+    var site = SITE
     private const val TAG = "MoviesMod"
     private const val PROBE_TTL_MS = 10 * 60 * 1000L
 
     /** One page of `/search/<q>/`, or null past the last page (a 404). */
     suspend fun search(query: String, page: Int = 1): Document? {
         val q = URLEncoder.encode(query.trim(), "UTF-8").replace("+", "%20")
-        val url = if (page <= 1) "$SITE/search/$q/" else "$SITE/search/$q/page/$page/"
+        val url = if (page <= 1) "$site/search/$q/" else "$site/search/$q/page/$page/"
         val res = app.get(url, timeout = 30L)
         return if (res.isSuccessful) res.document else null
     }

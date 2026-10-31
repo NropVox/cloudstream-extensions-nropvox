@@ -218,4 +218,68 @@ class OmniStreamParserTest {
         assertTrue(OmniStreamParser.enough(4, 2))
         assertTrue(OmniStreamParser.enough(8, 1))
     }
+
+    // --- Stremio addons (answers saved 2026-10-31) ---
+
+    @Test fun stremioIdsNameTheEpisode() {
+        assertEquals("tt15398776", OmniStreamParser.stremioId("tt15398776", null, null))
+        assertEquals("tt0903747:1:1", OmniStreamParser.stremioId("tt0903747", 1, 1))
+    }
+
+    @Test fun vadapavStreamsCarryFileSizeAndHeight() {
+        val movie = OmniStreamParser.stremioStreams(text("vadapav-oppenheimer.json"))
+        assertEquals(3, movie.size)
+        assertTrue(movie.all { it.height == 1080 && it.url.endsWith("&download=1") && it.headers.isEmpty() })
+        assertEquals("Oppenheimer.2023.REPACK.1080p.BluRay.DD+.5.1.X265-Ralphy.mkv · 6.45 GB", movie[0].label)
+
+        val episode = OmniStreamParser.stremioStreams(text("vadapav-breaking-bad-1x1.json")).single()
+        assertEquals("Breaking.Bad.S01E01.Pilot.1080p.BluRay.10bit.EAC3.5.1.x265-iVy.mkv · 2.97 GB", episode.label)
+    }
+
+    @Test fun stremioStreamsSkipTorrentsAndKeepProxyHeaders() {
+        val json = """{"streams":[
+            {"infoHash":"abc","name":"Torrent 1080p","title":"x"},
+            {"url":"https://cdn.example/v.m3u8","name":"Addon\n4K","description":"Some.Film.HDR",
+             "behaviorHints":{"proxyHeaders":{"request":{"Referer":"https://player.example/"}}}},
+            {"url":"magnet:?xt=urn:btih:abc","name":"x"}
+        ]}"""
+        val stream = OmniStreamParser.stremioStreams(json).single()
+        assertEquals(2160, stream.height)
+        assertEquals("Some.Film.HDR", stream.label)
+        assertEquals(mapOf("Referer" to "https://player.example/"), stream.headers)
+        assertTrue(OmniStreamParser.stremioStreams("""{"streams":[]}""").isEmpty())
+        assertTrue(OmniStreamParser.stremioStreams("<html>").isEmpty())
+    }
+
+    @Test fun openSubtitlesKeepsAFewPerLanguage() {
+        val subtitles = OmniStreamParser.stremioSubtitles(text("opensubtitles-oppenheimer.json"), 3)
+        // 96 files: 14 languages with 3 or more, 6 with 2, 12 with 1.
+        assertEquals(14 * 3 + 6 * 2 + 12, subtitles.size)
+        assertEquals(3, subtitles.count { it.lang == "eng" })
+        assertEquals(1, subtitles.count { it.lang == "spn" })
+        assertTrue(subtitles.all { it.url.startsWith("https://subs5.strem.io/") })
+        assertEquals("Spanish (Latin America)", OmniStreamParser.openSubtitlesLanguage("spl"))
+        assertNull(OmniStreamParser.openSubtitlesLanguage("eng"))
+    }
+
+    // --- Site domains ---
+
+    @Test fun domainsListNamesEachSite() {
+        val json = text("domains.json")
+        assertEquals("https://new1.vegamovies.lease", OmniStreamParser.domain(json, "vegamovies"))
+        assertEquals("https://moviesmod.tw", OmniStreamParser.domain(json, "moviesmod"))
+        assertEquals("https://4khdhub.one", OmniStreamParser.domain(json, "4khdhub"))
+        assertEquals("https://new10.hdhub4u.cl", OmniStreamParser.domain(json, "hdhub4u"))
+        assertNull(OmniStreamParser.domain(json, "nosuchsite"))
+    }
+
+    @Test fun domainsListIgnoresAnythingButAnOrigin() {
+        val json = """{"a":"https://Site.Example/","b":"http://site.example","c":"https://site.example/path","d":"javascript:x","e":5}"""
+        assertEquals("https://site.example", OmniStreamParser.domain(json, "a"))
+        assertNull(OmniStreamParser.domain(json, "b"))
+        assertNull(OmniStreamParser.domain(json, "c"))
+        assertNull(OmniStreamParser.domain(json, "d"))
+        assertNull(OmniStreamParser.domain(json, "e"))
+        assertNull(OmniStreamParser.domain("not json", "a"))
+    }
 }

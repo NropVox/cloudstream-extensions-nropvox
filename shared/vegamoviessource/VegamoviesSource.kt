@@ -20,6 +20,10 @@ data class VgPost(val url: String, val rawTitle: String, val imdbId: String?, va
 object VegamoviesSource {
     // The site rotates its domain; the nexdrive, fastdl and vcloud hosts are always read from the page links.
     const val SITE = "https://new1.vegamovies.lease"
+
+    /** Where search and permalinks go: [SITE], unless a plugin learned the current domain at runtime. */
+    @Volatile
+    var site = SITE
     const val SEARCH_PAGE_SIZE = 15
 
     // One resolver per plugin class loader: it holds the V-Cloud clearance.
@@ -27,7 +31,7 @@ object VegamoviesSource {
 
     // `/ts-search.php` is a Typesense proxy with 15 hits per page; wp-json search is poisoned by Cloudflare's cache.
     suspend fun search(query: String, page: Int = 1): VgSearch? =
-        app.get("$SITE/ts-search.php?q=${URLEncoder.encode(query.trim(), "UTF-8")}&page=$page", timeout = 30L).parsedSafe<VgSearch>()
+        app.get("$site/ts-search.php?q=${URLEncoder.encode(query.trim(), "UTF-8")}&page=$page", timeout = 30L).parsedSafe<VgSearch>()
 
     suspend fun post(url: String): VgPost? {
         val doc = app.get(url, timeout = 30L).document

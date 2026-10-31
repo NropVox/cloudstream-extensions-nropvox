@@ -13,21 +13,41 @@ on:
       - main
     paths-ignore:
       - '*.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.codex/**'
+  # Republish the builds branch by hand (e.g. after it was reset).
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           path: "src"
+          # The version check diffs against the last published commit.
+          fetch-depth: 0
 
       - name: Checkout builds
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: "builds"
           path: "builds"
+
+      # Fails before anything is published, so a plugin whose code changed without a version bump (including through
+      # a shared/ folder it compiles in) never ships a build that installed copies would ignore. The base is the
+      # commit the builds branch was last built from ("Build <sha>"), so pushes whose run was cancelled are covered.
+      - name: Check version bumps
+        run: |
+          base=$(git -C $GITHUB_WORKSPACE/builds log -1 --format=%s | sed -n 's/^Build \([0-9a-f]\{40\}\)$/\1/p')
+          cd $GITHUB_WORKSPACE/src
+          python3 .github/scripts/check_version_bumps.py "${base:-${{ github.event.before }}}" "$GITHUB_SHA"
 
       - name: Clean old builds
         run: |
@@ -35,34 +55,35 @@ jobs:
           rm $GITHUB_WORKSPACE/builds/*.jar || true
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
         with:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
           cache-read-only: false
 
-      - name: Access Secrets
-        env:
-          TMDB_API: ${{ secrets.TMDB_API }}
-          GOOGLE_TRANSLATE_API_KEY: ${{ secrets.GOOGLE_TRANSLATE_API_KEY }}
-        run: |
-          cd $GITHUB_WORKSPACE/src
-          echo TMDB_API=$TMDB_API >> local.properties
-          echo GOOGLE_TRANSLATE_API_KEY=$GOOGLE_TRANSLATE_API_KEY >> local.properties
-
-      - name: Build Plugins
+      # The parser tests run before publishing: a failing parser is a broken provider for every user.
+      - name: Test and build plugins
         run: |
           cd $GITHUB_WORKSPACE/src
           chmod +x gradlew
-          ./gradlew makePluginsJson
+          ./gradlew testDebugUnitTest makePluginsJson
           cp **/build/*.cs3 $GITHUB_WORKSPACE/builds
           cp **/build/*.jar $GITHUB_WORKSPACE/builds
           cp build/plugins.json $GITHUB_WORKSPACE/builds
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: src/*/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Push builds
         run: |

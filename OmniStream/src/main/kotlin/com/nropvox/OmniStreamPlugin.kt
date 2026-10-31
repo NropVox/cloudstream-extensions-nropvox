@@ -7,5 +7,6 @@ import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 class OmniStreamPlugin : BasePlugin() {
     override fun load() {
         registerMainAPI(OmniStream())
+        registerMainAPI(OmniAnime())
     }
 }

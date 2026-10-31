@@ -1,0 +1,220 @@
+{
+ "titles": {
+  "x-jat": "Suzume no Tojimari",
+  "pt": "Suzume",
+  "zh-Hans": "铃芽户缔",
+  "ja": "すずめの戸締まり",
+  "zh": "鈴芽之旅",
+  "en": "Suzume",
+  "de": "Suzume",
+  "fr": "Suzume",
+  "ru": "Судзумэ",
+  "ko": "스즈메의 문단속",
+  "pl": "Suzume",
+  "cs": "Suzume",
+  "vi": "Khóa chặt cửa nào Suzume",
+  "zh-Hant": "鈴芽之旅"
+ },
+ "episodeCount": 1,
+ "episodes": {
+  "1": {
+   "episode": "1",
+   "title": {
+    "en": "Complete Movie"
+   }
+  },
+  "S1": {
+   "episode": "S1",
+   "title": {
+    "en": "12 Minute Preview"
+   }
+  },
+  "S4": {
+   "episode": "S4",
+   "title": {
+    "ja": "ビデオコンテ",
+    "en": "Video Storyboard",
+    "x-jat": "Video Konte"
+   }
+  },
+  "S5": {
+   "episode": "S5",
+   "title": {
+    "ja": "ラストシーン「ただいま」Ver.",
+    "en": "Alternate Ending Scene - \"I`m Home\" Ver.",
+    "x-jat": "Last Scene \"Tadaima\" Ver."
+   }
+  },
+  "S2": {
+   "episode": "S2",
+   "title": {
+    "ja": "新海誠監督フィルモグラフィ",
+    "en": "Director Shinkai Makoto`s Filmography",
+    "x-jat": "Shinkai Makoto-kantoku Filmography"
+   }
+  },
+  "S3": {
+   "episode": "S3",
+   "title": {
+    "ja": "ビジュアルコメンタリー(原菜乃華✕松村北斗)",
+    "en": "Visual Commentary",
+    "x-jat": "Visual Commentary (Hara Nanoka x Matsumura Hokuto)"
+   }
+  },
+  "S6": {
+   "episode": "S6",
+   "title": {
+    "ja": "メイキングドクメンタリー『すずめの戸締まり』を辿る",
+    "en": "Making Documentary",
+    "x-jat": "Making Documentary: \"Suzume no Tojimari\" o Tadoru"
+   }
+  },
+  "S7": {
+   "episode": "S7",
+   "title": {
+    "ja": "新海誠を書き換えた3.11: あの日から『すずめの戸締まり』への旅 (新海誠×膳場貴子 対談)",
+    "en": "Interview with Shinkai Makoto: Impact of the 2011 Touhoku Earthquake",
+    "x-jat": "Shinkai Makoto o Kakikaeta 3.11: Ano Hi kara \"Suzume no Tojimari\" e no Tabi (Shinkai Makoto x Zenba Takako Taidan)"
+   }
+  },
+  "S8": {
+   "episode": "S8",
+   "title": {
+    "ja": "新海誠×野田洋次郎×陣内一真: スペシャル座談会「音楽の扉」",
+    "en": "Special Interview: The Door of Music",
+    "x-jat": "Shinkai Makoto x Noda Youjirou x Jinnouchi Kazuma: Special Zadankai \"Ongaku no Tobira\""
+   }
+  },
+  "S9": {
+   "episode": "S9",
+   "title": {
+    "ja": "~The First Door~ すずめの戸締まり 製作発表会見の舞台裏",
+    "en": "The First Door: Behind the Scenes of the Announcement",
+    "x-jat": "The First Door: Suzume no Tojimari Seisaku Happyou Kaiken no Butaiura"
+   }
+  },
+  "S11": {
+   "episode": "S11",
+   "title": {
+    "ja": "公開記念特番 OPEN THE DOOR ―新たな旅立ち―",
+    "en": "Special Program: Open the Door",
+    "x-jat": "Koukai Kinen Tokuban: Open the Door: Arata na Tabidachi"
+   }
+  },
+  "S12": {
+   "episode": "S12",
+   "title": {
+    "ja": "公開記念特番 BEHIND THE DOOR ―旅立ちの時―",
+    "en": "Special Program: Behind the Door",
+    "x-jat": "Koukai Kinen Tokuban: Behind the Door: Tabidachi no Toki"
+   }
+  },
+  "S10": {
+   "episode": "S10",
+   "title": {
+    "ja": "YouTube 特別配信 IN FRONT OF THE DOOR",
+    "en": "YouTube Special Broadcast: In Front of the Door",
+    "x-jat": "YouTube Tokubetsu Haishin: In Front of the Door"
+   }
+  },
+  "S13": {
+   "episode": "S13",
+   "title": {
+    "ja": "2021年12月15日 製作発表会見",
+    "en": "Production Announcement"
+   }
+  },
+  "S14": {
+   "episode": "S14",
+   "title": {
+    "ja": "2022年10月25日 完成報告会見",
+    "en": "Press Screening"
+   }
+  },
+  "S15": {
+   "episode": "S15",
+   "title": {
+    "ja": "2022年10月25日 完成披露試写会舞台挨拶",
+    "en": "Premiere Screening Event"
+   }
+  },
+  "S16": {
+   "episode": "S16",
+   "title": {
+    "ja": "SUZUME WORLD MEETING",
+    "en": "Suzume World Meeting",
+    "x-jat": "Suzume World Meeting"
+   }
+  },
+  "S17": {
+   "episode": "S17",
+   "title": {
+    "ja": "2022年11月11日 最速上映会舞台挨拶",
+    "en": "Stage Greeting: Earliest Showing"
+   }
+  },
+  "S18": {
+   "episode": "S18",
+   "title": {
+    "ja": "2022年11月11日 初日舞台挨拶",
+    "en": "Stage Greeting: Opening Day"
+   }
+  },
+  "S19": {
+   "episode": "S19",
+   "title": {
+    "ja": "2022年11月18日 全国生中継舞台挨拶",
+    "en": "Stage Greeting: Nationwide Live Streaming"
+   }
+  },
+  "S20": {
+   "episode": "S20",
+   "title": {
+    "ja": "2022年12月22日 冬休み直前! 教えて新海監督! ティーチイン舞台挨拶",
+    "en": "Stage Greeting: Teach-in Event"
+   }
+  },
+  "S21": {
+   "episode": "S21",
+   "title": {
+    "ja": "2022年11月28日 御礼 \"お返し申す\" 舞台挨拶",
+    "en": "Stage Greeting: \"Okaeshimousu\" Event"
+   }
+  },
+  "S22": {
+   "episode": "S22",
+   "title": {
+    "ja": "2023年2月 ドイツ ベルリン",
+    "en": "Press Conference: Berlin International Film Festival 2023"
+   }
+  },
+  "S23": {
+   "episode": "S23",
+   "title": {
+    "ja": "2023年3月25日 auプレミアム上映会スペシャルトーク",
+    "en": "Special Talk by au Premium"
+   }
+  },
+  "S24": {
+   "episode": "S24",
+   "title": {
+    "ja": "2023年5月27日 「最後の戸締まり」舞台挨拶",
+    "en": "Stage Greeting: Closing Day"
+   }
+  }
+ },
+ "mappings": {
+  "animeplanet_id": "suzume",
+  "kitsu_id": 45597,
+  "mal_id": 50594,
+  "type": "MOVIE",
+  "anilist_id": 142770,
+  "anisearch_id": 16928,
+  "anidb_id": 17041,
+  "notifymoe_id": null,
+  "livechart_id": 10948,
+  "thetvdb_id": null,
+  "imdb_id": "tt16428256",
+  "themoviedb_id": "916224"
+ }
+}

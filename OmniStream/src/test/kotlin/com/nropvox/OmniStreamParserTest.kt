@@ -117,6 +117,16 @@ class OmniStreamParserTest {
         assertFalse(OmniStreamParser.isDrm(master))
     }
 
+    @Test fun masterPlaylistQuality() {
+        val master = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=854x480\n480.m3u8\n" +
+            "#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x800,CODECS=\"avc1.640028\"\n1080.m3u8\n" +
+            "#EXT-X-STREAM-INF:BANDWIDTH=2500000,RESOLUTION=1280x720\n720.m3u8\n"
+        assertEquals(1080, OmniStreamParser.playlistQuality(master))
+        assertEquals(2160, OmniStreamParser.playlistQuality("#EXTM3U\n#EXT-X-STREAM-INF:RESOLUTION=3840x1608\n4k.m3u8\n"))
+        assertEquals(720, OmniStreamParser.playlistQuality("#EXTM3U\n#EXT-X-STREAM-INF:RESOLUTION=1280x536\n720.m3u8\n"))
+        assertNull(OmniStreamParser.playlistQuality("#EXTM3U\n#EXTINF:6,\nseg0.ts\n"))
+    }
+
     // --- Title-searched sites ---
 
     @Test fun vegamoviesHitsMatchByImdbId() {
@@ -213,10 +223,17 @@ class OmniStreamParserTest {
     }
 
     @Test fun finishPolicy() {
-        assertFalse(OmniStreamParser.enough(3, 3))
-        assertFalse(OmniStreamParser.enough(5, 1))
-        assertTrue(OmniStreamParser.enough(4, 2))
-        assertTrue(OmniStreamParser.enough(8, 1))
+        // Too few links, or all from one source: keep waiting.
+        assertNull(OmniStreamParser.grace(3, 3, 2160, 2_000))
+        assertNull(OmniStreamParser.grace(5, 1, 2160, 2_000))
+        // Enough backups: the best link sets how long stragglers may still come in.
+        assertEquals(1_000L, OmniStreamParser.grace(4, 2, 2160, 2_000))
+        assertEquals(2_000L, OmniStreamParser.grace(4, 2, 1080, 2_000))
+        assertEquals(2_000L, OmniStreamParser.grace(8, 1, 1080, 2_000))
+        // Only SD or Unknown links: the slower HD sources get until the soft deadline, then anything will do.
+        assertNull(OmniStreamParser.grace(12, 3, 720, 5_999))
+        assertEquals(500L, OmniStreamParser.grace(1, 1, 400, OmniStreamParser.SOFT_MS))
+        assertNull(OmniStreamParser.grace(0, 0, 0, 11_000))
     }
 
     // --- Stremio addons (answers saved 2026-10-31) ---
@@ -281,5 +298,91 @@ class OmniStreamParserTest {
         assertNull(OmniStreamParser.domain(json, "d"))
         assertNull(OmniStreamParser.domain(json, "e"))
         assertNull(OmniStreamParser.domain("not json", "a"))
+    }
+
+    // --- AniList → TMDB (OmniAnime) ---
+
+    private val frierenZip = OmniStreamParser.aniZip(text("anizip-154587-frieren.json"))!!
+    private val frierenS2Zip = OmniStreamParser.aniZip(text("anizip-182255-frieren-s2.json"))!!
+    private val jjkS2Zip = OmniStreamParser.aniZip(text("anizip-145064-jujutsu-kaisen-s2.json"))!!
+    private val frieren = show("tmdb-episodes-209867-frieren.json")
+
+    private fun air(season: Int, episode: Int, show: List<OmniStreamParser.AirEpisode>) =
+        show.first { it.season == season && it.episode == episode }
+
+    @Test fun aniZipIdsAndEpisodes() {
+        assertEquals(209867, frierenZip.tmdbId)
+        assertEquals("tt22248376", frierenZip.imdbId)
+        assertEquals("The Journey's End", frierenZip.episodes[1]?.title)
+        assertEquals("2023-09-29", frierenZip.episodes[1]?.airDate)
+        assertTrue(frierenZip.episodes[1]?.image!!.startsWith("https://"))
+        assertEquals((1..28).toSet(), frierenZip.episodes.keys)
+        // New seasons often have no TMDB id yet; OmniAnime then searches TMDB.
+        assertNull(frierenS2Zip.tmdbId)
+        assertEquals(95479, jjkS2Zip.tmdbId)
+        assertNull(OmniStreamParser.aniZip("not json"))
+    }
+
+    private fun tmdbEpisode(show: List<OmniStreamParser.AirEpisode>, start: String, episode: Int, zip: OmniStreamParser.AniZip) =
+        OmniStreamParser.tmdbEpisode(show, start, episode, zip.episodes[episode]?.airDate)
+
+    @Test fun aniListCourMapsIntoOneTmdbSeason() {
+        // JJK season 2 is TMDB 1x25-1x47.
+        assertEquals(air(1, 25, jjk), tmdbEpisode(jjk, "2023-07-06", 1, jjkS2Zip))
+        assertEquals(air(1, 47, jjk), tmdbEpisode(jjk, "2023-07-06", 23, jjkS2Zip))
+        // Frieren season 2 continues TMDB season 1 at episode 29.
+        assertEquals(air(1, 29, frieren), tmdbEpisode(frieren, "2026-01-16", 1, frierenS2Zip))
+        assertEquals(air(1, 31, frieren), tmdbEpisode(frieren, "2026-01-16", 3, frierenS2Zip))
+    }
+
+    @Test fun premiereOfSeveralEpisodesKeepsOrder() {
+        // Frieren premiered with four episodes on one day.
+        (1..5).forEach { assertEquals(air(1, it, frieren), tmdbEpisode(frieren, "2023-09-29", it, frierenZip)) }
+    }
+
+    @Test fun anotherShowsIdGivesNoEpisode() {
+        // JJK aired nothing around Frieren's first premiere. (Weekly shows of one season do share dates, which is why
+        // OmniAnime also checks the name of a show it found by search.)
+        assertNull(OmniStreamParser.tmdbEpisode(jjk, "2024-03-29", 1, null))
+        assertNull(OmniStreamParser.tmdbEpisode(frieren, null, 1, null))
+    }
+
+    @Test fun airDateOverridesAnOffOrdinal() {
+        // TMDB counts a recap AniList doesn't: the ordinal lands a week early, the air date finds the right one.
+        val show = listOf(
+            OmniStreamParser.AirEpisode(1, 1, "2024-01-05"),
+            OmniStreamParser.AirEpisode(1, 2, "2024-01-12"),
+            OmniStreamParser.AirEpisode(1, 3, "2024-01-19"),
+            OmniStreamParser.AirEpisode(1, 4, "2024-01-26"),
+        )
+        assertEquals(show[3], OmniStreamParser.tmdbEpisode(show, "2024-01-05", 3, "2024-01-26"))
+        assertEquals(show[2], OmniStreamParser.tmdbEpisode(show, "2024-01-05", 3, null))
+        assertNull(OmniStreamParser.tmdbEpisode(show, "2024-01-05", 3, "2024-03-01"))
+    }
+
+    @Test fun baseTitlesDropSeasonSuffixes() {
+        assertEquals(listOf("Sousou no Frieren"), OmniStreamParser.baseTitles(listOf("Sousou no Frieren 2nd Season")))
+        assertEquals(listOf("Frieren: Beyond Journey's End"), OmniStreamParser.baseTitles(listOf("Frieren: Beyond Journey's End Season 2")))
+        assertEquals(listOf("Shingeki no Kyojin"), OmniStreamParser.baseTitles(listOf("Shingeki no Kyojin: The Final Season Part 2")))
+        assertEquals(listOf("Overlord"), OmniStreamParser.baseTitles(listOf("Overlord II", "OVERLORD 2")))
+        assertEquals(listOf("Hawaii Five"), OmniStreamParser.baseTitles(listOf("Hawaii Five")))
+    }
+
+    @Test fun airedEpisodeCount() {
+        val today = OmniStreamParser.epochDay("2023-10-10")!!
+        assertEquals(7, OmniStreamParser.airedEpisodes("RELEASING", 12, 8, emptyMap(), today))
+        assertEquals(0, OmniStreamParser.airedEpisodes("NOT_YET_RELEASED", 12, null, emptyMap(), today))
+        assertEquals(28, OmniStreamParser.airedEpisodes("FINISHED", 28, null, frierenZip.episodes, today))
+        // Releasing with no count and no schedule: what ani.zip dates up to today (episodes 1-5 by 2023-10-10).
+        assertEquals(5, OmniStreamParser.airedEpisodes("RELEASING", null, null, frierenZip.episodes, today))
+    }
+
+    @Test fun aniListDatesAndFilmReleases() {
+        assertEquals("2023-09-29", OmniStreamParser.isoDate(2023, 9, 29))
+        assertEquals("2026-01-01", OmniStreamParser.isoDate(2026, 1, null))
+        assertNull(OmniStreamParser.isoDate(2026, null, null))
+        assertTrue(OmniStreamParser.sameRelease("2022-11-11", "2023-04-14"))
+        assertFalse(OmniStreamParser.sameRelease("2016-08-26", "2022-11-11"))
+        assertFalse(OmniStreamParser.sameRelease(null, "2022-11-11"))
     }
 }

@@ -46,7 +46,8 @@ object OmniStreamParser {
 
     data class AniCandidate(val id: Int, val format: String?, val episodes: Int?, val startDay: Int?, val titles: List<String>)
 
-    data class AniTarget(val anilistId: Int, val episode: Int)
+    /** [malId] is 0 when unknown (Reanime reads it as "none"). */
+    data class AniTarget(val anilistId: Int, val episode: Int, val malId: Int = 0)
 
     private val seriesFormats = setOf("TV", "TV_SHORT", "ONA")
 
@@ -128,6 +129,95 @@ object OmniStreamParser {
         return era * 146097 + doe - 719468
     }
 
+    // --- AniList → TMDB (OmniAnime) ---
+
+    /** What ani.zip knows of an AniList entry: its TMDB and IMDb ids (often missing for new seasons) and its episodes. */
+    data class AniZip(val tmdbId: Int?, val imdbId: String?, val episodes: Map<Int, AniZipEpisode>)
+
+    data class AniZipEpisode(val title: String?, val image: String?, val overview: String?, val airDate: String?, val runtime: Int?)
+
+    private fun com.fasterxml.jackson.databind.JsonNode.text(): String? =
+        takeIf { it.isTextual || it.isNumber }?.asText()?.trim()?.takeIf { it.isNotEmpty() }
+
+    /** An `api.ani.zip/mappings` answer; specials (`S1`, …) are left out, like TMDB's season 0. */
+    fun aniZip(json: String): AniZip? {
+        val tree = runCatching { mapper.readTree(json) }.getOrNull()?.takeIf { it.isObject } ?: return null
+        val mappings = tree.get("mappings")
+        val episodes = tree.get("episodes")?.fields()?.asSequence()?.mapNotNull { (key, node) ->
+            val number = key.toIntOrNull() ?: return@mapNotNull null
+            val titles = node.get("title")
+            number to AniZipEpisode(
+                // TVDB writes apostrophes as backticks ("The Journey`s End").
+                title = (titles?.get("en")?.text() ?: titles?.get("x-jat")?.text())?.replace('`', '\''),
+                image = node.get("image")?.text(),
+                overview = node.get("overview")?.text() ?: node.get("summary")?.text(),
+                airDate = node.get("airDate")?.text() ?: node.get("airdate")?.text(),
+                runtime = node.get("runtime")?.takeIf { it.isNumber }?.asInt()?.takeIf { it > 0 },
+            )
+        }?.toMap().orEmpty()
+        return AniZip(
+            mappings?.get("themoviedb_id")?.text()?.toIntOrNull(),
+            mappings?.get("imdb_id")?.text()?.takeIf { it.startsWith("tt") },
+            episodes,
+        )
+    }
+
+    /**
+     * The TMDB episode of AniList [episode] of an entry that premiered on [start], the inverse of [pickSeries]: TMDB
+     * keeps cours AniList splits in one season, so it is the [episode]th regular TMDB episode aired since [start]. The
+     * show must have aired something on [start] (else the id is another show), and when ani.zip dates the episode
+     * ([airDate]) the pick must have aired then too; failing that, the one TMDB episode of that day. Otherwise null,
+     * rather than a guess that would play the wrong episode.
+     */
+    fun tmdbEpisode(show: List<AirEpisode>, start: String?, episode: Int, airDate: String?): AirEpisode? {
+        val since = start?.let(::epochDay) ?: return null
+        val regular = show.filter { it.season > 0 }.sortedWith(compareBy({ it.season }, { it.episode }))
+            .mapNotNull { other -> other.airDate?.let(::epochDay)?.let { other to it } }
+        if (regular.none { (_, day) -> kotlin.math.abs(day - since) <= DATE_SLACK_DAYS }) return null
+        val pick = regular.filter { (_, day) -> day >= since - DATE_SLACK_DAYS }.getOrNull(episode - 1)
+        val aired = airDate?.let(::epochDay) ?: return pick?.first
+        if (pick != null && kotlin.math.abs(pick.second - aired) <= DATE_SLACK_DAYS) return pick.first
+        return regular.filter { (_, day) -> kotlin.math.abs(day - aired) <= DATE_SLACK_DAYS }.singleOrNull()?.first
+    }
+
+    /** A TMDB film is the AniList one when it came out within a year of it (festival vs. wide release). */
+    fun sameRelease(start: String?, release: String?): Boolean {
+        val a = start?.let(::epochDay) ?: return false
+        val b = release?.let(::epochDay) ?: return false
+        return kotlin.math.abs(a - b) <= 365
+    }
+
+    private val seasonSuffix = Regex(
+        """(?i)[\s:,-]+(?:(?:season|part|cour)\s*\d+|\d+(?:st|nd|rd|th)\s+(?:season|part|cour)|(?:the\s+)?(?:second|third|fourth|fifth|final)\s+season|i{2,}|\d+)\s*$"""
+    )
+
+    /**
+     * The show's name without the season AniList appends ("Sousou no Frieren 2nd Season", "… Final Season Part 2"),
+     * which is what TMDB calls the whole show; what TMDB returns is checked by air date, so a loose cut is harmless.
+     */
+    fun baseTitles(titles: List<String>): List<String> = titles.map { title ->
+        var base = title.trim()
+        repeat(3) { base = seasonSuffix.replace(base, "").trim() }
+        base
+    }.filter { it.length >= 3 }.distinctBy(::normalize)
+
+    /** `yyyy-MM-dd` from AniList's date parts, the day defaulting to the 1st; null without a month. */
+    fun isoDate(year: Int?, month: Int?, day: Int?): String? {
+        if (year == null || month == null) return null
+        return "%04d-%02d-%02d".format(year, month, day ?: 1)
+    }
+
+    /**
+     * Episodes out so far: up to the one before [nextAiring], else AniList's count, else the episodes ani.zip dates
+     * on or before [today] (days since 1970). Nothing for an entry that hasn't started.
+     */
+    fun airedEpisodes(status: String?, episodes: Int?, nextAiring: Int?, aniZip: Map<Int, AniZipEpisode>, today: Int): Int = when {
+        status == "NOT_YET_RELEASED" -> 0
+        nextAiring != null -> nextAiring - 1
+        episodes != null -> episodes
+        else -> aniZip.filter { (_, episode) -> episode.airDate?.let(::epochDay)?.let { it <= today } == true }.keys.maxOrNull() ?: 0
+    }
+
     // --- Playlists ---
 
     private val keyMethod = Regex("""^#EXT-X-(?:SESSION-)?KEY:.*?\bMETHOD=([A-Z0-9-]+)""", RegexOption.MULTILINE)
@@ -148,6 +238,21 @@ object OmniStreamParser {
         val uri = lines.drop(inf + 1).firstOrNull { it.isNotEmpty() && !it.startsWith("#") } ?: return null
         return runCatching { java.net.URI(playlistUrl).resolve(uri).toString() }.getOrNull()
     }
+
+    private val resolution = Regex("""RESOLUTION=(\d+)x(\d+)""")
+
+    /** Standard heights by the frame they name; a variant counts as the tallest whose width or height it nearly reaches. */
+    private val heights = listOf(3840 to 2160, 2560 to 1440, 1920 to 1080, 1280 to 720, 854 to 480, 640 to 360, 426 to 240)
+
+    /**
+     * The quality of a master playlist's best variant (`RESOLUTION=1920x800` is 1080p: cinema crops keep the width),
+     * or null for a media playlist, which names no resolution.
+     */
+    fun playlistQuality(playlist: String): Int? = resolution.findAll(playlist).mapNotNull { match ->
+        val width = match.groupValues[1].toIntOrNull() ?: return@mapNotNull null
+        val height = match.groupValues[2].toIntOrNull() ?: return@mapNotNull null
+        heights.firstOrNull { (w, h) -> width >= w * 9 / 10 || height >= h * 9 / 10 }?.second ?: 144
+    }.maxOrNull()
 
     // --- Title-searched sites ---
 
@@ -303,7 +408,22 @@ object OmniStreamParser {
 
     // --- Finish policy ---
 
-    /** Enough to stop waiting (after a short grace): a few working links from more than one source, or plenty from one. */
-    fun enough(goodLinks: Int, goodSources: Int): Boolean =
-        (goodLinks >= 4 && goodSources >= 2) || goodLinks >= 8
+    /** Until then the race holds out for an HD link; after it, any working link will do. */
+    const val SOFT_MS = 6_000L
+
+    /**
+     * How much longer the link race should wait for stragglers, or null to keep waiting: [links] working links from
+     * [sources] sources, the best of them [best] (a height; download-only links rank as Unknown, 400), [elapsed] ms
+     * into the race. The player starts the best link, so with a 4K or 1080p one and a few backups from more than one
+     * source (or plenty from one) waiting longer only costs time. Without an HD link the slower sources still get
+     * until [SOFT_MS]; after that the first working link ends the wait.
+     */
+    fun grace(links: Int, sources: Int, best: Int, elapsed: Long): Long? = when {
+        links == 0 -> null
+        elapsed >= SOFT_MS -> 500L
+        links < 4 || (sources < 2 && links < 8) -> null
+        best >= 2160 -> 1_000L
+        best >= 1080 -> 2_000L
+        else -> null
+    }
 }

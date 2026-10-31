@@ -6,13 +6,14 @@ import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
+import com.lagradost.cloudstream3.utils.Qualities
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
@@ -31,9 +32,10 @@ typealias OmniSource = suspend (subtitleCallback: (SubtitleFile) -> Unit, callba
 
 /**
  * Runs every source at once on the IO pool and returns as soon as the answer is good enough: every source done, or
- * [OmniStreamParser.enough] working links plus a short grace, and never later than [TOTAL_MS]. The player only starts
- * once loadLinks returns, so one slow source must not hold it. Each link is probed before it is passed on, so the
- * count only includes links that answer; links that are proven dead (HTTP error, not a playlist, DRM) are dropped.
+ * enough working links for [OmniStreamParser.grace] (an HD one with backups, or anything after its soft deadline)
+ * plus that grace, and never later than [TOTAL_MS]. The player only starts once loadLinks returns, so one slow source
+ * must not hold it. Each link is probed before it is passed on, so the count only includes links that answer; links
+ * that are proven dead (HTTP error, not a playlist, DRM) are dropped.
  * Single-use links (GoPlay) can't be probed without spending them, so they pass unchecked, and so do links whose
  * probe is still running when the race closes.
  *
@@ -49,16 +51,18 @@ internal class OmniLinkRace(
     private val links = ConcurrentHashMap.newKeySet<String>()
     private val subtitles = ConcurrentHashMap.newKeySet<String>()
     private val goodLinks = AtomicInteger()
+    private val bestQuality = AtomicInteger()
     private val goodSources = ConcurrentHashMap.newKeySet<String>()
     private val dropped = AtomicInteger()
     // Links whose probe has not answered yet, by URL. A probe that never answers counts as alive, so whatever is
     // still here when the race closes is passed on unchecked; [pending] is also the lock between the two.
     private val pending = HashMap<String, ExtractorLink>()
-    private val enough = CompletableDeferred<Unit>()
+    private val changed = Channel<Unit>(Channel.CONFLATED)
 
     /** What one source did; read for the summary line, also for sources still running when the race closed. */
     private class SourceStat(val label: String) {
         val emitted = AtomicInteger()
+        @Volatile var first: Long? = null
         @Volatile var status = "running"
         @Volatile var ms: Long? = null
     }
@@ -77,13 +81,22 @@ internal class OmniLinkRace(
             // Probes are only started by sources, so once those are done the queue is complete.
             val done = scope.async { jobs.joinAll(); probes.toList().joinAll() }
             val ended = withTimeoutOrNull(TOTAL_MS) {
-                select {
-                    done.onAwait { }
-                    enough.onAwait { }
-                }
-                if (!done.isCompleted) {
-                    finish = "enough"
-                    withTimeoutOrNull(GRACE_MS) { done.await() }
+                while (!done.isCompleted) {
+                    val elapsed = System.currentTimeMillis() - started
+                    val grace = OmniStreamParser.grace(goodLinks.get(), goodSources.size, bestQuality.get(), elapsed)
+                    if (grace != null) {
+                        finish = "enough"
+                        withTimeoutOrNull(grace) { done.await() }
+                        break
+                    }
+                    // Look again on the next working link, or at the soft deadline when the answer changes by itself.
+                    val soft = OmniStreamParser.SOFT_MS - elapsed
+                    withTimeoutOrNull(if (soft > 0) soft else Long.MAX_VALUE) {
+                        select {
+                            done.onAwait { }
+                            changed.onReceive { }
+                        }
+                    }
                 }
             }
             if (ended == null) finish = "deadline"
@@ -96,7 +109,7 @@ internal class OmniLinkRace(
         unchecked.forEach(callback)
         val elapsed = System.currentTimeMillis() - started
         Log.i(tag, "${goodLinks.get()} links (${dropped.get()} dead dropped, ${unchecked.size} unchecked) in $elapsed ms, $finish; " +
-            stats.joinToString(", ") { "${it.label} ${it.emitted.get()}/${it.ms ?: elapsed}ms" + if (it.status == "ok") "" else " ${it.status}" })
+            stats.joinToString(", ") { "${it.label} ${it.emitted.get()}/${it.first?.let { f -> "$f-" } ?: ""}${it.ms ?: elapsed}ms" + if (it.status == "ok") "" else " ${it.status}" })
         return goodLinks.get() > 0 || unchecked.isNotEmpty()
     }
 
@@ -108,7 +121,7 @@ internal class OmniLinkRace(
                 try {
                     source({ subtitle -> if (!closed.get() && subtitles.add(subtitle.url)) subtitleCallback(subtitle) }) { link ->
                         if (!closed.get() && links.add(link.url)) {
-                            stat.emitted.incrementAndGet()
+                            if (stat.emitted.incrementAndGet() == 1) stat.first = System.currentTimeMillis() - started
                             if (probe) {
                                 synchronized(pending) { pending[link.url] = link }
                                 probes.add(scope.launch { probeAndEmit(label, link) })
@@ -146,16 +159,15 @@ internal class OmniLinkRace(
     private fun emit(label: String, link: ExtractorLink) {
         callback(link)
         goodSources.add(label)
-        if (OmniStreamParser.enough(goodLinks.incrementAndGet(), goodSources.size)) enough.complete(Unit)
+        bestQuality.accumulateAndGet(link.quality, ::maxOf)
+        goodLinks.incrementAndGet()
+        changed.trySend(Unit)
     }
 
     companion object {
         /** Hard cap on the whole of loadLinks. */
         const val TOTAL_MS = 12_000L
         const val SOURCE_MS = 12_000L
-
-        /** How long stragglers may still add links once there are enough. */
-        const val GRACE_MS = 2_500L
     }
 }
 
@@ -189,12 +201,17 @@ internal object OmniProbe {
         }
     }
 
-    /** The playlist must answer, be HLS and carry no DRM key, in the master or (where keys usually are) its first variant. */
+    /**
+     * The playlist must answer, be HLS and carry no DRM key, in the master or (where keys usually are) its first variant.
+     * A master read here also gives an "Auto" link of Unknown quality its best variant's height, so the player ranks it
+     * by what it can really play rather than below 480p.
+     */
     private fun playlistAlive(link: ExtractorLink): Boolean {
         val (code, body, finalUrl) = fetch(link, link.url, ranged = false)
         if (dead(code)) return false
         if (code !in 200..299) return true
         if (!OmniStreamParser.isPlaylist(body) || OmniStreamParser.isDrm(body)) return false
+        if (link.quality == Qualities.Unknown.value) OmniStreamParser.playlistQuality(body)?.let { link.quality = it }
         val variant = OmniStreamParser.firstVariant(body, finalUrl) ?: return true
         val (variantCode, variantBody, _) = fetch(link, variant, ranged = false)
         return !(variantCode in 200..299 && OmniStreamParser.isDrm(variantBody))

@@ -15,10 +15,11 @@ Run from the repo root. `local.properties` (gitignored) must point at the Androi
 ./gradlew :Name:testDebugUnitTest     # JVM parser tests for one plugin
 ./gradlew :Name:testDebugUnitTest --tests 'com.nropvox.NameParserTest.someTest'   # single test
 ./gradlew :Name:deployWithAdb         # push + hot-reload on the adb-connected phone
-./gradlew makePluginsJson             # what CI runs: builds all .cs3 + build/plugins.json
+./gradlew makePluginsJson             # builds all .cs3 + build/plugins.json
+python3 .github/scripts/check_version_bumps.py origin/main   # plugins changed since origin/main without a version bump
 ```
 
-CI ([.github/workflows/build.yml](.github/workflows/build.yml)) builds on every push to `main` and force-pushes the `.cs3` files and `plugins.json` to the `builds` branch. Pushing to `main` therefore publishes to users.
+CI ([.github/workflows/build.yml](.github/workflows/build.yml)) runs on every push to `main`. It runs the version-bump check against the last published commit, then `testDebugUnitTest makePluginsJson`, and force-pushes the `.cs3` files and `plugins.json` to the `builds` branch. Pushing to `main` therefore publishes to users. A missing bump or a failing parser test stops the whole publish. Put `[no-bump]` in the commit message for metadata-only changes (`status`, `description`), which reach users through `plugins.json` without a bump.
 
 For on-device work (deploy, driving the app, reading logcat), use the project skill `.claude/skills/cloudstream-plugin-dev`. Its `scripts/csdev.py` wraps the gradle tasks above and adb. It also uses a phone lease, so several agents don't drive the device at once. Don't run raw adb in place of it.
 

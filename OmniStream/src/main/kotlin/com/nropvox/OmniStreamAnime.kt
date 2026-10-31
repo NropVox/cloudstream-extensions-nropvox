@@ -1,8 +1,13 @@
 package com.nropvox
 
 import com.lagradost.api.Log
+import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.app
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -29,6 +34,13 @@ internal object OmniStreamAnime {
 
     private val searches = ConcurrentHashMap<String, List<OmniStreamParser.AniCandidate>>()
     private val targets = ConcurrentHashMap<String, OmniStreamParser.AniTarget>()
+    private val warmScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Started by `load`: the AniList searches don't depend on the episode, so playing one needn't wait for them. */
+    fun warm(link: OmniLink) {
+        val formats = if (link.type == "movie") movieFormats else seriesFormats
+        warmScope.launch { listOfNotNull(link.title, link.originalTitle).distinct().forEach { search(it, formats) } }
+    }
 
     /**
      * Null when the title isn't on AniList under a matching name, or the episode can't be placed. [fetchEpisodes]
@@ -53,6 +65,31 @@ internal object OmniStreamAnime {
             (target?.let { "${it.anilistId} ep ${it.episode}" } ?: "no match"))
         return target?.also { targets[key] = it }
     }
+
+    /** The AniList-keyed sources, each asking [find] for the entry and episode (a null skips them all). */
+    fun sources(find: suspend () -> OmniStreamParser.AniTarget?): List<Pair<String, OmniSource>> = listOf(
+        "AnimoTv" to { subs, links ->
+            find()?.let { found ->
+                listOf("sub", "dub").amap { lang -> AnimoStreamSource.load(found.anilistId, found.episode, lang, "AnimoTv", subs, links) }
+            }
+        },
+        "Ani.pm" to { subs, links ->
+            find()?.let { found ->
+                listOf("sub", "dub").amap { lang ->
+                    AniPmSource.load(ApLinkData(AniPmParser.ANILIST, found.anilistId.toString(), found.episode, lang), "Ani.pm", subs, links)
+                }
+            }
+        },
+        "Reanime" to { subs, links ->
+            find()?.let { found -> ReanimeSource.load(found.anilistId, found.malId, found.episode, listOf("sub", "dub"), "Reanime", subs, links) }
+        },
+        "AnimeX" to { subs, links ->
+            find()?.let { found ->
+                val slug = AnimeXSource.slug(found.anilistId) ?: return@let
+                listOf("sub", "dub").amap { lang -> AnimeXSource.load(slug, found.episode, lang, "AnimeX", subs, links) }
+            }
+        },
+    )
 
     private suspend fun search(name: String, formats: List<String>): List<OmniStreamParser.AniCandidate> {
         val key = "${formats.first()}|$name"

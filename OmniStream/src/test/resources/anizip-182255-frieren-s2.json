@@ -1,0 +1,301 @@
+{
+ "titles": {
+  "x-jat": "Sousou no Frieren S2",
+  "en": "Frieren: Beyond Journey`s End (2026)",
+  "ru": "Фрирен, провожающая в последний путь (2026)",
+  "ja": "葬送のフリーレン (2026)",
+  "de": "Frieren: Nach dem Ende der Reise Staffel 2",
+  "it": "Frieren - Oltre la fine del viaggio (2026)",
+  "pt": "Frieren e a Jornada para o Além (2026)",
+  "zh-Hans": "葬送的芙莉莲 第二季"
+ },
+ "episodeCount": 10,
+ "episodes": {
+  "1": {
+   "episode": "1",
+   "seasonNumber": 2,
+   "episodeNumber": 1,
+   "absoluteEpisodeNumber": 29,
+   "airDate": "2026-01-16",
+   "title": {
+    "ja": "じゃあ行こうか",
+    "en": "Shall We Go, Then?",
+    "de": "Lasst uns aufbrechen",
+    "it": "Allora, andiamo?",
+    "x-jat": "Jaa Ikouka",
+    "uk": "То що, ходімо?"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/10719109/screencap/6966236a8a113.jpg",
+   "overview": "Frieren, Fern, and Stark leave the magic city of Äußerst behind and travel along a road in the northern lands.",
+   "runtime": 24
+  },
+  "2": {
+   "episode": "2",
+   "seasonNumber": 2,
+   "episodeNumber": 2,
+   "absoluteEpisodeNumber": 30,
+   "airDate": "2026-01-23",
+   "title": {
+    "ja": "南の勇者",
+    "en": "The Hero of the South",
+    "de": "Der Held des Südens",
+    "it": "È l`eroe del Sud",
+    "x-jat": "Minami no Yuusha",
+    "uk": "Герой Півдня"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11447765/screencap/696f60a4eb1b0.jpg",
+   "overview": "In a village in the northern lands, Frieren's party are hired to polish a statue of a hero.",
+   "runtime": 24
+  },
+  "3": {
+   "episode": "3",
+   "seasonNumber": 2,
+   "episodeNumber": 3,
+   "absoluteEpisodeNumber": 31,
+   "airDate": "2026-01-30",
+   "title": {
+    "ja": "好きな場所",
+    "en": "Somewhere She`d Like",
+    "de": "Ein Ort, der ihr gefällt",
+    "it": "Un posto che le piace",
+    "x-jat": "Suki na Basho",
+    "uk": "Місцина, що їй сподобається"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11447766/screencap/69789ca997b6e.jpg",
+   "overview": "Frieren's party dream of hot springs as they reach Etwas, but the village is abandoned.",
+   "runtime": 24
+  },
+  "4": {
+   "episode": "4",
+   "seasonNumber": 2,
+   "episodeNumber": 4,
+   "absoluteEpisodeNumber": 32,
+   "airDate": "2026-02-06",
+   "title": {
+    "ja": "誰かの故郷",
+    "en": "Other People`s Homes",
+    "de": "Die Heimat anderer",
+    "it": "Le patrie degli altri",
+    "x-jat": "Dareka no Kokyou",
+    "uk": "Домівки інших"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11447767/screencap/6981cbe484ace.jpg",
+   "overview": "Stark only asked Fern out as a joke, but the two end up going on a date.",
+   "runtime": 24
+  },
+  "5": {
+   "episode": "5",
+   "seasonNumber": 2,
+   "episodeNumber": 5,
+   "absoluteEpisodeNumber": 33,
+   "airDate": "2026-02-13",
+   "title": {
+    "ja": "北部高原の物流",
+    "en": "Logistics in the Northern Plateau",
+    "de": "Die Logistik der Nördlichen Hochebene",
+    "it": "La rete logistica dell`altopiano del nord",
+    "x-jat": "Hokubu Kougen no Butsuryuu",
+    "uk": "Логістика Північного Плато"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11447768/screencap/698b19040caea.jpg",
+   "overview": "Frieren is reunited with Fass the dwarf, who has been searching for the Boshaft liquor for over 200 years.",
+   "runtime": 24
+  },
+  "6": {
+   "episode": "6",
+   "seasonNumber": 2,
+   "episodeNumber": 6,
+   "absoluteEpisodeNumber": 34,
+   "airDate": "2026-02-27",
+   "title": {
+    "ja": "討伐要請",
+    "en": "A Demon-Slaying Request",
+    "de": "Vernichtungsauftrag",
+    "it": "Richiesta di sterminio",
+    "x-jat": "Toubatsu Yousei",
+    "uk": "Запит на вбивство демона"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11447769/screencap/699d8cf5b1b0b.jpg",
+   "overview": "A village on the Northern Plateau is wiped out, and the victims' distinctive wounds point to a certain demon.",
+   "runtime": 24
+  },
+  "7": {
+   "episode": "7",
+   "seasonNumber": 2,
+   "episodeNumber": 7,
+   "absoluteEpisodeNumber": 35,
+   "airDate": "2026-03-06",
+   "title": {
+    "ja": "神技のレヴォルテ",
+    "en": "The Divine Revolte",
+    "de": "Der unbezwingbare Revolte",
+    "it": "Il divino Revolte",
+    "x-jat": "Shingi no Revolte",
+    "uk": "Божественний Револьт"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11447770/screencap/69a6f20c83e9e.jpg",
+   "overview": "Frieren, Fern, and Methode enter the woods to look for the four-armed Divine Revolte.",
+   "runtime": 24
+  },
+  "8": {
+   "episode": "8",
+   "seasonNumber": 2,
+   "episodeNumber": 8,
+   "absoluteEpisodeNumber": 36,
+   "airDate": "2026-03-13",
+   "title": {
+    "ja": "立派な最期",
+    "en": "A Magnificent End",
+    "de": "Ehrenhafter Tod",
+    "it": "Una morte da eroe",
+    "x-jat": "Rippa na Saigo",
+    "uk": "Неймовірний кінець"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11447771/screencap/69aff6e8ac804.jpg",
+   "overview": "The Divine Revolte appears at the village, while Frieren, Fern, and Methode battle Solide and Hemmung.",
+   "runtime": 24
+  },
+  "9": {
+   "episode": "9",
+   "seasonNumber": 2,
+   "episodeNumber": 9,
+   "absoluteEpisodeNumber": 37,
+   "airDate": "2026-03-20",
+   "title": {
+    "ja": "ヒンメルの自伝",
+    "en": "Himmel`s Memoirs",
+    "de": "Himmels Autobiografie",
+    "it": "L`autobiografia di Himmel",
+    "x-jat": "Himmel no Jiden",
+    "uk": "Мемуари Гіммеля"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11447772/screencap/69ba70acf348f.jpg",
+   "overview": "When Frieren's party cannot afford the fare to cross Lake Korridor, the captain proposes a trade.",
+   "runtime": 24
+  },
+  "10": {
+   "episode": "10",
+   "seasonNumber": 2,
+   "episodeNumber": 10,
+   "absoluteEpisodeNumber": 38,
+   "airDate": "2026-03-27",
+   "title": {
+    "ja": "美しい光景",
+    "en": "A Beautiful Sight",
+    "de": "Ein herrlicher Anblick",
+    "it": "Splendido panorama",
+    "x-jat": "Utsukushii Koukei",
+    "uk": "Прекрасне видовище"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11447773/screencap/69c3c29147412.jpg",
+   "overview": "Hidden within the massive bridge spanning the Great Canyon Tor is a secret story of Himmel and Gehen.",
+   "runtime": 24
+  },
+  "S1": {
+   "episode": "S1",
+   "seasonNumber": 0,
+   "episodeNumber": 22,
+   "airDate": "2026-01-19",
+   "title": {
+    "ja": "●●の魔法 第18回: 見た者を拘束する魔法",
+    "en": "Magic Episode 18: Magic to Restrain Those in View",
+    "x-jat": "Marumaru no Mahou Dai 18 Kai: Mita Mono o Kousoku Suru Mahou"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11323588/screencap/697cb63985f9e.jpg",
+   "overview": "The Northern Magic Corps captain Warrior-mage, Wirbel demonstrates his signature binding spell \"Sorganeil\" on Frieren, Fern, and Stark.",
+   "runtime": 2
+  },
+  "S2": {
+   "episode": "S2",
+   "seasonNumber": 0,
+   "episodeNumber": 23,
+   "airDate": "2026-02-02",
+   "title": {
+    "ja": "●●の魔法 第19回: 童心に還る魔法",
+    "en": "Magic Episode 19: Magic to Return to Childhood",
+    "x-jat": "Marumaru no Mahou Dai 19 Kai: Doushin ni Kaeru Mahou"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11599484/screencap/69877918cf7fb.jpg",
+   "overview": "Frieren experiments with a spell designed to revert someone to their childhood self, specifically aiming to turn Himmel back to a time before he became a narcissist.",
+   "runtime": 2
+  },
+  "S3": {
+   "episode": "S3",
+   "seasonNumber": 0,
+   "episodeNumber": 24,
+   "airDate": "2026-02-17",
+   "title": {
+    "ja": "●●の魔法 第20回: 心と体が入れ替わる魔法",
+    "en": "Magic Episode 20: Magic to Swap Souls and Bodies",
+    "x-jat": "Marumaru no Mahou Dai 20 Kai: Kokoro to Karada ga Irekawaru Mahou"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11622957/screencap/699483e4c151f.jpg",
+   "overview": "Frieren, Fern, and Stark obtain a spell that swaps the hearts and bodies of two targets as a reward for a quest.",
+   "runtime": 2
+  },
+  "S4": {
+   "episode": "S4",
+   "seasonNumber": 0,
+   "episodeNumber": 25,
+   "airDate": "2026-03-02",
+   "title": {
+    "ja": "●●の魔法 第21回: お洗濯の魔法",
+    "en": "Magic Episode 21: Magic to Clean Clothes",
+    "x-jat": "Marumaru no Mahou Dai 21 Kai: Osentaku no Mahou"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11651781/screencap/69a5e05a6800c.jpg",
+   "overview": "Following the events of the First-Class Mage Exam, Fern is granted a single \"privilege\" (a spell of her choice) by the great mage Serie. While other mages typically ask for legendary combat spells or ancient lost knowledge, Fern requests a seemingly mundane spell: the ability to make clothes clean and spotless.",
+   "runtime": 2
+  },
+  "S5": {
+   "episode": "S5",
+   "seasonNumber": 0,
+   "episodeNumber": 26,
+   "airDate": "2026-03-16",
+   "title": {
+    "ja": "●●の魔法 第22回: 考えていることを言ってしまう魔法その2",
+    "en": "Magic Episode 22: Magic to Say What You Are Thinking (Part 2)",
+    "x-jat": "Marumaru no Mahou Dai 22 Kai: Kangaete Iru Koto o Itte Shimau Mahou Sono 2"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11679869/screencap/69b7ebdcc088d.jpg",
+   "overview": "Fern uses Frieren's spell “The Magic That Makes You Say What You're Thinking” to peek into Methode's mind, but the result ends up shocking her.",
+   "runtime": 2
+  },
+  "S7": {
+   "episode": "S7",
+   "title": {
+    "ja": "ABEMA出張特番 ~討伐せよ! 神技のレヴォルテ~",
+    "en": "Episode S7",
+    "x-jat": "Abema Shucchou Tokuban: Toubatsu Seyo! Shingi no Revolte"
+   }
+  },
+  "S6": {
+   "episode": "S6",
+   "seasonNumber": 0,
+   "episodeNumber": 27,
+   "airDate": "2026-05-22",
+   "title": {
+    "ja": "●●の魔法 USJ特別編: 憧れにひたれる魔法",
+    "en": "Magic USJ Special Episode: Magic to Be Immersed in Dreams",
+    "x-jat": "Marumaru no Mahou USJ Tokubetsu Hen: Akogare ni Hitareru Mahou"
+   },
+   "image": "https://artworks.thetvdb.com/banners/v4/episode/11807696/screencap/6a196e2ab6770.jpg",
+   "overview": "2026/5/30 (Fri) Universal Studios Japan collaboration starts",
+   "runtime": 2
+  }
+ },
+ "mappings": {
+  "animeplanet_id": "frieren-beyond-journeys-end-season-2",
+  "kitsu_id": 49240,
+  "mal_id": 59978,
+  "type": "TV",
+  "anilist_id": 182255,
+  "anisearch_id": 19635,
+  "anidb_id": 18886,
+  "notifymoe_id": "qZA25eRNR",
+  "livechart_id": 12860,
+  "thetvdb_id": 424536,
+  "imdb_id": null,
+  "themoviedb_id": null
+ }
+}

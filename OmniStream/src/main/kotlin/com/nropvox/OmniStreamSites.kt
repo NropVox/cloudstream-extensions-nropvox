@@ -5,17 +5,25 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.Qualities
 import com.nropvox.OmniStreamParser.SiteHit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The sources that are found by searching the site for the title: each matches the TMDB title against the site's
  * hits ([OmniStreamParser.matches]), checks the IMDb or TMDB id where the site's page shows one, then plays the
  * episode through the site's own resolver from `shared/`. What a title resolved to is kept for the session, so the
- * next episode skips the search. The sites rotate their domains, so each search first picks up the current one
- * ([domains]).
+ * next episode skips the search, and [warm] already looks it up while the title's page is open. The sites rotate
+ * their domains, so each search first picks up the current one ([domains]).
  */
 internal object OmniStreamSites {
     private const val TAG = "OmniStream"
@@ -25,6 +33,14 @@ internal object OmniStreamSites {
     private const val CACHE_SIZE = 200
 
     private val cache = ConcurrentHashMap<String, Any>()
+
+    /**
+     * Lookups in progress, so playing while [warm] is still at it waits for that one instead of searching again. They
+     * run outside the link race, so one that finishes after the race closed is still kept for the next play.
+     */
+    private val lookups = ConcurrentHashMap<String, Deferred<Any?>>()
+    private val lookupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private const val LOOKUP_MS = 30_000L
 
     /** StreamPlay's maintained list of these sites' current domains. */
     private const val DOMAINS = "https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json"
@@ -56,10 +72,37 @@ internal object OmniStreamSites {
     @Suppress("UNCHECKED_CAST")
     private suspend fun <T : Any> cached(key: String, find: suspend () -> T?): T? {
         cache[key]?.let { return it as T }
-        val value = find() ?: return null
-        if (cache.size > CACHE_SIZE) cache.clear()
-        cache[key] = value
-        return value
+        val lookup = lookups.computeIfAbsent(key) {
+            lookupScope.async {
+                try {
+                    withTimeoutOrNull(LOOKUP_MS) { safely(TAG, key) { find() } }?.also { value ->
+                        if (cache.size > CACHE_SIZE) cache.clear()
+                        cache[key] = value
+                    }
+                } finally {
+                    lookups.remove(key)
+                }
+            }
+        }
+        return lookup.await() as T?
+    }
+
+    /**
+     * Started by `load`: the domains and every lookup that doesn't depend on the episode the user picks (a movie, a
+     * show with one season, 4KHDHub's whole-show page), so the slow site sources start playing sooner.
+     */
+    fun warm(link: OmniLink) {
+        lookupScope.launch {
+            domains()
+            val single = if (!link.series) link else if (link.totalSeasons == 1) link.copy(season = 1) else null
+            listOfNotNull<suspend () -> Unit>(
+                { fourKHDHubFiles(link) },
+                single?.let { { vegamoviesPages(it) } },
+                single?.let { { moviesModSources(it) } },
+                single?.takeIf { it.kind == OmniStreamParser.KIND_ASIAN }?.let { { kissKHEpisodes(it) } },
+                single?.takeIf { it.kind == OmniStreamParser.KIND_ASIAN }?.let { { goPlayTitle(it) } },
+            ).forEach { launch { it() } }
+        }
     }
 
     private val OmniLink.series get() = type == "tv"
@@ -71,7 +114,12 @@ internal object OmniStreamSites {
     private fun OmniLink.key(site: String) = "$site:$type:$id:${season ?: 0}"
 
     suspend fun vegamovies(link: OmniLink, name: String, callback: (ExtractorLink) -> Unit) {
-        val pages = cached(link.key("vegamovies")) {
+        val pages = vegamoviesPages(link) ?: return
+        VegamoviesSource.loadLinks(VgLink(pages, link.episode.takeIf { link.series }), name, callback)
+    }
+
+    private suspend fun vegamoviesPages(link: OmniLink) =
+        cached(link.key("vegamovies")) {
             domains()
             val hits = VegamoviesSource.search(link.title)?.hits.orEmpty().mapNotNull { hit ->
                 val doc = hit.document ?: return@mapNotNull null
@@ -90,12 +138,23 @@ internal object OmniStreamSites {
                     }
                     groups.flatMap(VegamoviesSource::pagesOf)
                 }.ifEmpty { null }
-        } ?: return
-        VegamoviesSource.loadLinks(VgLink(pages, link.episode.takeIf { link.series }), name, callback)
+        }
+
+    /**
+     * Instant links are Google's copy, which ignores Range: the player reads the whole file before the first frame.
+     * MoviesMod keeps their height when nothing else plays, but here the other sources nearly always have a seekable
+     * link, so they rank as Unknown and stay a fallback.
+     */
+    suspend fun moviesMod(link: OmniLink, name: String, callback: (ExtractorLink) -> Unit) {
+        val sources = moviesModSources(link) ?: return
+        MoviesModSource.loadLinks(MmLink(sources, link.episode.takeIf { link.series }), name) { found ->
+            if (found.source == "$name Instant") found.quality = Qualities.Unknown.value
+            callback(found)
+        }
     }
 
-    suspend fun moviesMod(link: OmniLink, name: String, callback: (ExtractorLink) -> Unit) {
-        val sources = cached(link.key("moviesmod")) {
+    private suspend fun moviesModSources(link: OmniLink) =
+        cached(link.key("moviesmod")) {
             domains()
             val doc = MoviesModSource.search(link.title) ?: return@cached null
             val hits = MoviesModParser.cards(doc).map { card ->
@@ -115,13 +174,17 @@ internal object OmniStreamSites {
                     }
                 }
             }.filterNotNull().flatten().ifEmpty { null }
-        } ?: return
-        MoviesModSource.loadLinks(MmLink(sources, link.episode.takeIf { link.series }), name, callback)
-    }
+        }
 
     suspend fun fourKHDHub(link: OmniLink, name: String, callback: (ExtractorLink) -> Unit) {
-        // A series page lists every season, so the whole show is kept, not one season.
-        val files = cached("4khdhub:${link.type}:${link.id}") {
+        val files = fourKHDHubFiles(link) ?: return
+        val wanted = if (link.series) files.filter { it.season == link.season && it.episode == link.episode } else files
+        if (wanted.isNotEmpty()) FourKHDHubSource.loadLinks(FkLink(wanted.map { it.file }), name, callback)
+    }
+
+    /** A series page lists every season, so the whole show is kept, not one season. */
+    private suspend fun fourKHDHubFiles(link: OmniLink) =
+        cached("4khdhub:${link.type}:${link.id}") {
             domains()
             val (cards, _) = FourKHDHubSource.search(link.title)
             val hits = cards.map { SiteHit(it.url, it.title, it.year, series = it.series) }
@@ -137,13 +200,16 @@ internal object OmniStreamSites {
                     FourKHDHubParser.movieFiles(doc).map { FkEpisode(0, 0, it) }
                 }
             }.filterNotNull().flatten().ifEmpty { null }
-        } ?: return
-        val wanted = if (link.series) files.filter { it.season == link.season && it.episode == link.episode } else files
-        if (wanted.isNotEmpty()) FourKHDHubSource.loadLinks(FkLink(wanted.map { it.file }), name, callback)
-    }
+        }
 
     suspend fun kissKH(link: OmniLink, name: String, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {
-        val episodes = cached(link.key("kisskh")) {
+        val episodes = kissKHEpisodes(link) ?: return
+        val episodeId = (if (link.series) episodes[link.episode] else episodes[1] ?: episodes.values.singleOrNull()) ?: return
+        KissKHSource.loadEpisode(episodeId, name, subtitleCallback, callback)
+    }
+
+    private suspend fun kissKHEpisodes(link: OmniLink) =
+        cached(link.key("kisskh")) {
             val hits = KissKHSource.search(link.title).mapNotNull { card ->
                 val id = card.id ?: return@mapNotNull null
                 val (title, year) = OmniStreamParser.splitYear(card.title ?: return@mapNotNull null)
@@ -163,14 +229,17 @@ internal object OmniStreamSites {
                         episode.id?.let { number to it }
                     }.toMap().ifEmpty { null }
                 }
-        } ?: return
-        val episodeId = (if (link.series) episodes[link.episode] else episodes[1] ?: episodes.values.singleOrNull()) ?: return
-        KissKHSource.loadEpisode(episodeId, name, subtitleCallback, callback)
-    }
+        }
 
     /** [source] is OmniStream's API name: GoPlay's single-use URLs are renewed by its video interceptor. */
     suspend fun goPlay(link: OmniLink, source: String, name: String, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit) {
-        val title = cached(link.key("goplay")) {
+        val title = goPlayTitle(link) ?: return
+        val data = (if (link.series) title.episodes[link.episode] else title.url) ?: return
+        GoPlaySource.loadLinks(data, source, name, subtitleCallback, callback)
+    }
+
+    private suspend fun goPlayTitle(link: OmniLink) =
+        cached(link.key("goplay")) {
             val hits = GoPlaySource.search(link.title).map { SiteHit(it.url, GoPlaySource.stripOriginalTitle(it.title), null) }
             val names = OmniStreamParser.seasonNames(link.names, link.season.takeIf { link.series })
             OmniStreamParser.matches(hits, names, link.years, null, link.series, null).take(MAX_PAGES)
@@ -182,8 +251,5 @@ internal object OmniStreamSites {
                         OmniStreamParser.sameTitle(original, listOf(link.originalTitle))
                     page.takeIf { it.isMovie != link.series && sameOriginal }
                 }
-        } ?: return
-        val data = (if (link.series) title.episodes[link.episode] else title.url) ?: return
-        GoPlaySource.loadLinks(data, source, name, subtitleCallback, callback)
-    }
+        }
 }

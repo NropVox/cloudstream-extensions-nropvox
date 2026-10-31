@@ -18,10 +18,7 @@ import com.lagradost.cloudstream3.ShowStatus
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.addDate
-import com.lagradost.cloudstream3.amap
-import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mainPageOf
-import com.lagradost.cloudstream3.mapper
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieLoadResponse
@@ -32,12 +29,10 @@ import com.lagradost.cloudstream3.newTvSeriesSearchResponse
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.Interceptor
 import java.net.URLEncoder
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * OmniStream: a TMDB catalog (movies, shows, anime, Asian drama) whose links come from every TMDB-keyed source in
@@ -68,49 +63,9 @@ class OmniStream : MainAPI() {
         "tv/top_rated" to "Top rated shows",
     )
 
-    /**
-     * TMDB through the public API with a site key; when that key is refused (or the API is unreachable), the keyless
-     * TMDB mirror Movy uses. Null for a missing title. Answers are kept for [TMDB_TTL_MS], so reopening a title or
-     * playing its episodes doesn't ask again.
-     */
-    private suspend fun tmdb(path: String): String? {
-        val separator = if ('?' in path) '&' else '?'
-        val query = "$path${separator}language=en-US&include_adult=false"
-        val now = System.currentTimeMillis()
-        tmdbCache[query]?.let { (at, body) -> if (now - at < TMDB_TTL_MS) return body }
-        return fetchTmdb(query)?.also {
-            if (tmdbCache.size >= TMDB_CACHE_SIZE) tmdbCache.clear()
-            tmdbCache[query] = now to it
-        }
-    }
-
-    private suspend fun fetchTmdb(query: String): String? {
-        if (!keyRefused) {
-            try {
-                val response = app.get("$TMDB_API/$query&api_key=$TMDB_KEY", timeout = 20L)
-                if (response.isSuccessful) return response.text
-                if (response.code != 401 && response.code != 403 && response.code != 429) return null
-                if (response.code != 429) keyRefused = true
-                Log.w(name, "TMDB key: HTTP ${response.code}, using the mirror")
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(name, "TMDB: ${e.message}, trying the mirror")
-            }
-        }
-        return try {
-            app.get("$TMDB_MIRROR/$query", timeout = 20L).takeIf { it.isSuccessful }?.text
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.w(name, "TMDB mirror: ${e.message}")
-            null
-        }
-    }
-
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val separator = if ('?' in request.data) '&' else '?'
-        val result = tmdb("${request.data}${separator}page=$page")?.let { tryParseJson<OmniTmdbPage>(it) }
+        val result = OmniTmdb.get("${request.data}${separator}page=$page")?.let { tryParseJson<OmniTmdbPage>(it) }
         // Only "trending/all" tags each result; the other rows are all one type.
         val type = if (request.data.contains("tv")) "tv" else "movie"
         val items = result?.results.orEmpty().mapNotNull { it.toSearchResponse(type) }
@@ -121,7 +76,7 @@ class OmniStream : MainAPI() {
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
         val encoded = URLEncoder.encode(query.trim(), "UTF-8")
-        val result = tmdb("search/multi?query=$encoded&page=$page")?.let { tryParseJson<OmniTmdbPage>(it) }
+        val result = OmniTmdb.get("search/multi?query=$encoded&page=$page")?.let { tryParseJson<OmniTmdbPage>(it) }
         val items = result?.results.orEmpty().mapNotNull { it.toSearchResponse(null) }
         return newSearchResponseList(items, hasNext = page < (result?.totalPages ?: 0))
     }
@@ -158,7 +113,7 @@ class OmniStream : MainAPI() {
 
     override suspend fun load(url: String): LoadResponse? {
         val (type, id) = OmniStreamParser.titleRef(url) ?: return null
-        val details = tmdb("$type/$id?append_to_response=external_ids,credits,recommendations,videos")
+        val details = OmniTmdb.get("$type/$id?append_to_response=external_ids,credits,recommendations,videos")
             ?.let { tryParseJson<OmniTmdbDetails>(it) } ?: return null
         val title = details.title ?: details.name ?: return null
         val imdbId = details.imdbId ?: details.externalIds?.imdbId
@@ -182,6 +137,9 @@ class OmniStream : MainAPI() {
             kind = kind,
             airDate = details.releaseDate,
         )
+        // The page is open, so the lookups the sources need before their first link start now, not on play.
+        OmniStreamSites.warm(link)
+        if (kind == OmniStreamParser.KIND_ANIME) OmniStreamAnime.warm(link)
 
         val load: LoadResponse = if (type == "movie") {
             val movieType = if (kind == OmniStreamParser.KIND_ANIME) TvType.AnimeMovie else TvType.Movie
@@ -213,10 +171,9 @@ class OmniStream : MainAPI() {
         }
     }
 
-    /** Specials (season 0) are skipped: the sources only index regular seasons. */
     private suspend fun episodes(id: Int, details: OmniTmdbDetails, link: OmniLink) =
-        seasons(id, details.seasons.orEmpty().mapNotNull { it.seasonNumber?.takeIf { n -> n > 0 } }).also { seasons ->
-            if (link.kind == OmniStreamParser.KIND_ANIME) OmniStreamAnime.showEpisodes[id] = airEpisodes(seasons)
+        OmniTmdb.seasons(id, OmniTmdb.seasonNumbers(details)).also { seasons ->
+            if (link.kind == OmniStreamParser.KIND_ANIME) OmniStreamAnime.showEpisodes[id] = OmniTmdb.airEpisodes(seasons)
         }.flatMap { (number, episodes) ->
             episodes.mapNotNull { episode ->
                 val episodeNumber = episode.episodeNumber ?: return@mapNotNull null
@@ -232,33 +189,6 @@ class OmniStream : MainAPI() {
                 }
             }
         }
-
-    /** Episodes of the given seasons, in season order; TMDB allows at most 20 appended sub-requests per call. */
-    private suspend fun seasons(id: Int, numbers: List<Int>): List<Pair<Int, List<OmniTmdbEpisode>>> =
-        numbers.chunked(20).amap { chunk ->
-            val appended = chunk.joinToString(",") { "season/$it" }
-            val seasons = try {
-                tmdb("tv/$id?append_to_response=$appended")?.let { mapper.readTree(it) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                null
-            } ?: return@amap emptyList()
-            chunk.map { number ->
-                val season = seasons.get("season/$number")?.let { mapper.treeToValue(it, OmniTmdbSeason::class.java) }
-                number to season?.episodes.orEmpty()
-            }
-        }.flatten()
-
-    private fun airEpisodes(seasons: List<Pair<Int, List<OmniTmdbEpisode>>>) = seasons.flatMap { (number, episodes) ->
-        episodes.mapNotNull { episode -> episode.episodeNumber?.let { OmniStreamParser.AirEpisode(number, it, episode.airDate) } }
-    }
-
-    /** Used when an anime episode is played without `load` having run in this session. */
-    private suspend fun fetchAirEpisodes(id: Int): List<OmniStreamParser.AirEpisode> {
-        val details = tmdb("tv/$id")?.let { tryParseJson<OmniTmdbDetails>(it) } ?: return emptyList()
-        return airEpisodes(seasons(id, details.seasons.orEmpty().mapNotNull { it.seasonNumber?.takeIf { n -> n > 0 } }))
-    }
 
     override suspend fun loadLinks(
         data: String,
@@ -277,74 +207,16 @@ class OmniStream : MainAPI() {
 
     /** Every source that can serve this title, each under the name it labels its links with. */
     private fun sources(link: OmniLink): List<Pair<String, OmniSource>> {
-        val season = link.season
-        val episode = link.episode
-        val sources = mutableListOf<Pair<String, OmniSource>>(
-            "Dulo" to { subs, links ->
-                DuloSource.load(DuloLink(link.id, link.type, link.title, link.year, link.imdbId, season, episode), "Dulo", subs, links)
-            },
-            "Movy" to { subs, links ->
-                MovySource.load(MovyLink(link.id, link.type, link.title, link.year, link.imdbId, link.totalSeasons, season, episode),
-                    "Movy", subs, links)
-            },
-            "7Movies" to { subs, links ->
-                SevenMoviesSource.load(SevenLink(link.id, link.type, season, episode), "7Movies", subs, links)
-            },
-            "TonkaCine" to { subs, links ->
-                TonkaCineResolver.resolve(TonkaLink(link.id, link.type, season, episode), TonkaCineResolver.SITE, "TonkaCine", subs, links)
-            },
-            "Cno.to" to { subs, links ->
-                CnoToSource.load(CnoLink(link.type, link.id, season, episode), "Cno.to", subs, links)
-            },
-            "Vegamovies" to { _, links -> OmniStreamSites.vegamovies(link, "Vegamovies", links) },
-            "MoviesMod" to { _, links -> OmniStreamSites.moviesMod(link, "MoviesMod", links) },
-            "4KHDHub" to { _, links -> OmniStreamSites.fourKHDHub(link, "4KHDHub", links) },
-        )
-        if (link.imdbId != null) {
-            sources += "Vadapav" to { _, links -> OmniStremio.streams(OmniStremio.VADAPAV, link, "Vadapav", links) }
-            sources += "OpenSubtitles" to { subs, _ -> OmniStremio.subtitles(OmniStremio.OPENSUBTITLES, link, subs) }
-        }
+        val sources = tmdbSources { link }.toMutableList()
         if (link.kind == OmniStreamParser.KIND_ASIAN) {
             sources += "KatDrama" to { subs, links ->
-                KatDramaSource.load(KatLink(link.id, link.type, season ?: 1, episode ?: 1, link.title, link.year), "KatDrama", subs, links)
+                KatDramaSource.load(KatLink(link.id, link.type, link.season ?: 1, link.episode ?: 1, link.title, link.year), "KatDrama", subs, links)
             }
             sources += "KissKH" to { subs, links -> OmniStreamSites.kissKH(link, "KissKH", subs, links) }
             sources += GOPLAY to { subs, links -> OmniStreamSites.goPlay(link, name, GOPLAY, subs, links) }
         }
-        if (link.kind == OmniStreamParser.KIND_ANIME) {
-            // Both AniList sources wait for the same lookup, which never holds up the TMDB-keyed ones.
-            val lock = Mutex()
-            var looked = false
-            var target: OmniStreamParser.AniTarget? = null
-            suspend fun target() = lock.withLock {
-                if (!looked) {
-                    target = OmniStreamAnime.target(link, ::fetchAirEpisodes)
-                    looked = true
-                }
-                target
-            }
-            sources += "AnimoTv" to { subs, links ->
-                target()?.let { found ->
-                    listOf("sub", "dub").amap { lang -> AnimoStreamSource.load(found.anilistId, found.episode, lang, "AnimoTv", subs, links) }
-                }
-            }
-            sources += "Ani.pm" to { subs, links ->
-                target()?.let { found ->
-                    listOf("sub", "dub").amap { lang ->
-                        AniPmSource.load(ApLinkData(AniPmParser.ANILIST, found.anilistId.toString(), found.episode, lang), "Ani.pm", subs, links)
-                    }
-                }
-            }
-            sources += "Reanime" to { subs, links ->
-                target()?.let { found -> ReanimeSource.load(found.anilistId, 0, found.episode, listOf("sub", "dub"), "Reanime", subs, links) }
-            }
-            sources += "AnimeX" to { subs, links ->
-                target()?.let { found ->
-                    val slug = AnimeXSource.slug(found.anilistId) ?: return@let
-                    listOf("sub", "dub").amap { lang -> AnimeXSource.load(slug, found.episode, lang, "AnimeX", subs, links) }
-                }
-            }
-        }
+        // The AniList sources all wait for the same lookup, which never holds up the TMDB-keyed ones.
+        if (link.kind == OmniStreamParser.KIND_ANIME) sources += OmniStreamAnime.sources(once { OmniStreamAnime.target(link, OmniTmdb::episodesOf) })
         return sources
     }
 
@@ -356,22 +228,60 @@ class OmniStream : MainAPI() {
 
     companion object {
         private const val GOPLAY = "GoPlay"
-        private const val TMDB_API = "https://api.themoviedb.org/3"
-        private const val TMDB_MIRROR = "https://db.wecollege.net/3"
-
-        /** dulo.mov's TMDB key, from its JS bundle (the site calls TMDB from the browser with it). */
-        private const val TMDB_KEY = "1865f43a0549ca50d341dd9ab8b29f49"
 
         /** Animation, reality, talk and news: what a drama row should leave out. */
         private const val NOT_DRAMA = "16,10764,10767,10763"
 
-        @Volatile
-        private var keyRefused = false
+        /**
+         * The TMDB-keyed sources, the title-searched sites and the IMDb-keyed Stremio addons, each asking [find] for
+         * the title (OmniAnime maps its AniList episode to TMDB there; a null skips them all).
+         */
+        internal fun tmdbSources(find: suspend () -> OmniLink?): List<Pair<String, OmniSource>> = listOf(
+            "Dulo" to { subs, links ->
+                find()?.let { link ->
+                    DuloSource.load(DuloLink(link.id, link.type, link.title, link.year, link.imdbId, link.season, link.episode), "Dulo", subs, links)
+                }
+            },
+            "Movy" to { subs, links ->
+                find()?.let { link ->
+                    MovySource.load(MovyLink(link.id, link.type, link.title, link.year, link.imdbId, link.totalSeasons, link.season, link.episode),
+                        "Movy", subs, links)
+                }
+            },
+            "7Movies" to { subs, links ->
+                find()?.let { link -> SevenMoviesSource.load(SevenLink(link.id, link.type, link.season, link.episode), "7Movies", subs, links) }
+            },
+            "TonkaCine" to { subs, links ->
+                find()?.let { link ->
+                    TonkaCineResolver.resolve(TonkaLink(link.id, link.type, link.season, link.episode), TonkaCineResolver.SITE, "TonkaCine", subs, links)
+                }
+            },
+            "Cno.to" to { subs, links ->
+                find()?.let { link -> CnoToSource.load(CnoLink(link.type, link.id, link.season, link.episode), "Cno.to", subs, links) }
+            },
+            "Vegamovies" to { _, links -> find()?.let { link -> OmniStreamSites.vegamovies(link, "Vegamovies", links) } },
+            "MoviesMod" to { _, links -> find()?.let { link -> OmniStreamSites.moviesMod(link, "MoviesMod", links) } },
+            "4KHDHub" to { _, links -> find()?.let { link -> OmniStreamSites.fourKHDHub(link, "4KHDHub", links) } },
+            // Both skip titles without an IMDb id.
+            "Vadapav" to { _, links -> find()?.let { link -> OmniStremio.streams(OmniStremio.VADAPAV, link, "Vadapav", links) } },
+            "OpenSubtitles" to { subs, _ -> find()?.let { link -> OmniStremio.subtitles(OmniStremio.OPENSUBTITLES, link, subs) } },
+        )
+    }
+}
 
-        private const val TMDB_TTL_MS = 30 * 60 * 1000L
-        private const val TMDB_CACHE_SIZE = 100
-
-        /** TMDB answers by query, with when they were fetched. */
-        private val tmdbCache = ConcurrentHashMap<String, Pair<Long, String>>()
+/** [block] run once, by whichever caller asks first; the others wait for its answer. A failed run is retried. */
+internal fun <T> once(block: suspend () -> T): suspend () -> T {
+    val lock = Mutex()
+    var done = false
+    var value: T? = null
+    return {
+        lock.withLock {
+            if (!done) {
+                value = block()
+                done = true
+            }
+            @Suppress("UNCHECKED_CAST")
+            value as T
+        }
     }
 }

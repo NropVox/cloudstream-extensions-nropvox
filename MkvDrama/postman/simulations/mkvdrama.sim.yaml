@@ -1,5 +1,0 @@
-simulation: mkvdrama-cloudstream-protocol
-routing: path
-mocks:
-  - routeKey: series
-    path: ../mocks/series/config.yaml

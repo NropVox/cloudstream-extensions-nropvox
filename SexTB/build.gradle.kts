@@ -4,7 +4,7 @@ cloudstream {
     authors = listOf("NropVox")
     language = "en"
     description =
-        "The Best Free JAV online, JAV DVD online, Stream JAV Online High Quality always updated daily. Requires the Extractors plugin."
+        "The Best Free JAV online, JAV DVD online, Stream JAV Online High Quality always updated daily. Requires the JavExtractors plugin."
     status = 1 // will be 3 if unspecified
     tvTypes = listOf("NSFW")
     iconUrl =

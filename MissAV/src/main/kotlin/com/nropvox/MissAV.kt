@@ -147,7 +147,7 @@ class MissAV : MainAPI() {
         }
     }
 
-    // Resolved by the Extractors plugin's MissAVPage, which JavStream shares. [data] is `code:url`.
+    // Resolved by the JavExtractors plugin's MissAVPage, which JavStream shares. [data] is `code:url`.
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,

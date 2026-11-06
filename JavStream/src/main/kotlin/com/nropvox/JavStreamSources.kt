@@ -20,7 +20,7 @@ import java.util.Collections
 
 /**
  * Finds a movie code on each source site. Javtiful and MissAV watch pages are then resolved by the page
- * extractors of the Extractors plugin, which their own providers use too; JavGG, SupJav and JavHD list host
+ * extractors of the JavExtractors plugin, which their own providers use too; JavGG, SupJav and JavHD list host
  * embeds, and JavFC2 and JavHD's own player give an HLS playlist directly.
  */
 internal object JavStreamSources {

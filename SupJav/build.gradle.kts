@@ -3,7 +3,7 @@ version = 1
 cloudstream {
     authors = listOf("NropVox")
     language = "en"
-    description = "Censored, uncensored, amateur and subtitled JAV from SupJav, up to 1080p HLS. Plays the site's Vidara, EarnVids, LuluStream and VOE servers (older posts: FC2Stream, StreamTape). Requires the Extractors plugin for all but VOE and StreamTape."
+    description = "Censored, uncensored, amateur and subtitled JAV from SupJav, up to 1080p HLS. Plays the site's Vidara, EarnVids, LuluStream and VOE servers (older posts: FC2Stream, StreamTape). Requires the JavExtractors plugin for all but VOE and StreamTape."
     status = 1
     tvTypes = listOf("NSFW")
     iconUrl = "https://www.google.com/s2/favicons?domain=supjav.com&sz=%size%"

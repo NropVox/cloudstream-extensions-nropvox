@@ -160,7 +160,7 @@ class SexTB : MainAPI() {
         }
     }
 
-    // Resolved by the Extractors plugin's SexTBPage, which JavStream shares.
+    // Resolved by the JavExtractors plugin's SexTBPage, which JavStream shares.
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,

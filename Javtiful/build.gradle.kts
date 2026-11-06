@@ -3,7 +3,7 @@ version = 14
 cloudstream {
     authors = listOf("NropVox")
     language = "en"
-    description = "Watch more than 60,000 Full HD JAV Online For Free at Javtiful. Requires the Extractors plugin."
+    description = "Watch more than 60,000 Full HD JAV Online For Free at Javtiful. Requires the JavExtractors plugin."
     status = 1
     tvTypes = listOf("NSFW")
     iconUrl =

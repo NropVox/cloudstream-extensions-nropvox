@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-Cloudstream 3 extensions (published under the `nropvox` repo shortcode). Each top-level folder with a `build.gradle.kts` is one plugin module. `settings.gradle.kts` includes every such folder automatically, so creating a folder registers it. To build only one module, comment out the auto-include and add `include("Name")`. All plugins use the package `com.nropvox`. Plugins load in separate class loaders, so the same class name in several plugins doesn't clash.
+Cloudstream 3 extensions (`NropVox/cloudstream-extensions-nropvox`, NSFW only; general-audience providers live in `IstarVin/cloudstream-extensions-istarvin`; published under the `nropvox` repo shortcode). Each top-level folder with a `build.gradle.kts` is one plugin module. `settings.gradle.kts` includes every such folder automatically, so creating a folder registers it. To build only one module, comment out the auto-include and add `include("Name")`. All plugins use the package `com.nropvox`. Plugins load in separate class loaders, so the same class name in several plugins doesn't clash.
 
 ## Commands
 
@@ -36,8 +36,8 @@ Standard module layout (see `.claude/skills/cloudstream-plugin-dev/references/sc
 
 Code shared between plugins:
 
-- **`Extractors` module**: a separate installed plugin that registers many host `ExtractorApi`s (DoodStream, VidHide variants, F4, HLSProxy, SubtitleCat, …) and the JAV page resolvers in `JavPages.kt`. Providers reach them at runtime through `loadExtractor(url, …)`. Javtiful, SexTB, MissAV and JavStream need Extractors installed to work.
-- **`shared/<name>/` source folders**: compiled into each plugin that uses them, so there's no runtime dependency. Example: `kotlin.srcDir("../shared/nexdrive")` in Vegamovies and XPrimeHub. Put host chains that only some providers use here. Put globally useful URL-routable extractors in Extractors. Changing `shared/` affects every plugin that compiles it in.
+- **`JavExtractors` module**: a separate installed plugin that registers many host `ExtractorApi`s (DoodStream, VidHide variants, F4, HLSProxy, SubtitleCat, …) and the JAV page resolvers in `JavPages.kt`. Providers reach them at runtime through `loadExtractor(url, …)`. Javtiful, SexTB, MissAV and JavStream need JavExtractors installed to work. The SFW repo (`IstarVin/cloudstream-extensions-istarvin`) has its own `Extractors` plugin without the JAV page resolvers.
+- **`shared/<name>/` source folders**: compiled into each plugin that uses them, so there's no runtime dependency. Example: `kotlin.srcDir("../shared/nexdrive")` in XPrimeHub. Put host chains that only some providers use here. Put globally useful URL-routable extractors in JavExtractors. Changing `shared/` affects every plugin that compiles it in.
 - **`shared/<site>source/` folders and OmniStream**: the link code of the TMDB- and AniList-keyed providers (`dulosource`, `movysource`, `sevenmoviessource`, `tonkacinesource`, `cnotosource`, `katdramasource`, `animotvsource`, `anipmsource`) lives in shared folders. Each one is compiled into its own plugin and into **OmniStream**, the TMDB-catalog aggregator that races all of them in parallel (`OmniStreamRace.kt`). A fix to one of these folders needs a version bump in both the owning plugin and OmniStream. OmniStream compiles every folder into one class loader, so top-level class names must be unique across them (prefix them with the site name).
 
 The root `build.gradle.kts` sets compileSdk/minSdk, Java/JVM 11 (needed for Cloudstream's inline JSON/link APIs) and the shared dependencies. Don't bump Jackson above 2.13.1 or Rhino above 1.8.1. Per-module `build.gradle.kts` holds `version` and the `cloudstream { }` metadata. **Bump `version` whenever you change a plugin**, so installed copies update. `tvTypes` decides which picker chip shows the provider (`"NSFW"` for adult providers).

@@ -141,7 +141,7 @@ class Javtiful : MainAPI() {
         }
     }
 
-    // Resolved by the Extractors plugin's JavtifulPage, which JavStream shares.
+    // Resolved by the JavExtractors plugin's JavtifulPage, which JavStream shares.
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,

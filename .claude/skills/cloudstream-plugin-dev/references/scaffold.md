@@ -97,7 +97,11 @@ class <Name> : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val items: List<SearchResponse> = TODO()
-        return newHomePageResponse(HomePageList(request.name, items), hasNext = TODO())
+        // isHorizontalImages: true for landscape thumbnails, false for portrait posters (see rules below)
+        return newHomePageResponse(
+            HomePageList(request.name, items, isHorizontalImages = TODO()),
+            hasNext = TODO()
+        )
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
@@ -138,6 +142,13 @@ Rules that came from real device failures:
   `Semaphore(2)`. Five or more parallel requests deadlock OkHttp's per-host limit inside the interceptor.
 - **WordPress behind Cloudflare**: `/wp-json/...` may be edge-cached by path only, so every query
   returns the same body. Use `/index.php?rest_route=/wp/v2/...` instead.
+- **Set `isHorizontalImages` on every `HomePageList` from the poster shape, not by eye.** Landscape
+  thumbnails (16:9 or 4:3, as on Javtiful, MissAV and SupJav) need `true`, so the home cards are
+  wide. Portrait posters keep the default `false`. Measure with
+  `scripts/poster_shape.py <url> ...` on the exact image URLs the parser emits (the lazy-load
+  attribute if the site has one, and the same size variant), from several rows. The flag belongs
+  to each row. If a site mixes both shapes across its rows, set the flag per row and don't apply
+  one value to the whole plugin.
 - Return early with `emptyList()` / `false` on blank input, and throw `ErrorLoadingException("…")`
   with a useful message from `load` when the page can't be parsed. That message shows on the result page.
 - Log with `Log.i/w(name, …)`. The test phone drops `Log.d`.

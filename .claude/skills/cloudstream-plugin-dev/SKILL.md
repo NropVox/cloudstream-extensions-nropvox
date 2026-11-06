@@ -97,9 +97,28 @@ and recon is cheaper.
 
 From the recon you need to know:
 - which requests produce each home row, search results, title details and the episode list;
+- whether each row's images are portrait posters or landscape thumbnails. That decides
+  `isHorizontalImages` on its `HomePageList` (see step 1b);
 - the chain from an episode to a playable URL: own CDN, a known extractor host, or an embed that needs its own extractor;
 - protection: a Cloudflare challenge (→ `CloudflareKiller`), required headers or referer, signed or expiring URLs;
 - the `tvTypes` the site really carries, because they decide which picker chip shows the provider.
+
+### 1b. Check the poster shape
+
+Don't guess from the site's look. Take 5–10 card images from several home rows, using the exact
+URLs the parser will put in `posterUrl` (the lazy-load attribute when the site uses one, and the
+same size variant), and run the bundled checker:
+
+```bash
+python3 .claude/skills/cloudstream-plugin-dev/scripts/poster_shape.py <url> <url> ... --header "Referer: https://<host>/"
+```
+
+It reads each image's size from its header (PNG, JPEG, GIF, WebP; Pillow for anything else) and
+prints the verdict with the flag to use. Landscape (ratio above 1.2) gives
+`isHorizontalImages = true`, like Javtiful, MissAV and SupJav. Portrait gives `false`, the default.
+A "mixed" verdict means the rows differ, so set the flag per row. A "square" verdict is ambiguous:
+look at the card layout on the phone before deciding. The checker reads only the image dimensions,
+so it doesn't replace the screenshot check in step 4.
 
 ### 2. Scaffold the module
 
@@ -125,6 +144,7 @@ cs lease acquire --note "<Name>: verify"   # first: nothing below runs without i
 cs deploy <Name>          # must print "loaded <Name>.cs3"
 cs provider <Name>        # if missing from the picker: wrong tvTypes chip, NSFW off, or the load failed
 cs rows                   # every mainPageOf row present, with plausible titles
+cs shot                   # home screen: each row's card shape matches the step 1b verdict
 cs psearch "<a title you know exists>"
 cs tap "<result title>"; cs screen
 cs play 1; sleep 10; cs links; cs sources
@@ -161,7 +181,9 @@ to `loadLinks` can break `load`.
 ## Workflow: fixing or updating an existing plugin
 
 1. Reproduce on the phone first (`cs deploy P` with the current code, then the failing step), so
-   you know the symptom is real and current.
+   you know the symptom is real and current. If the home cards look wrong in shape (too tall,
+   squashed, or cropped), re-run the step 1b check on the rows' current image URLs before changing
+   the flag. The site may have moved to a different thumbnail style.
 2. Re-check the site with curl or a quick recon of the broken part. If the site moved hosts or
    changed its API, update the recon doc too, so the next fix starts from the truth.
 3. Fix, bump `version` in `P/build.gradle.kts`, add or adjust a parser test for the case that
@@ -178,6 +200,7 @@ report to the user with a short matrix, so they can see what was checked and wha
 |------------------|-----------------------------------------------------|
 | loads            | ✓ Loaded plugin <Name>.cs3                          |
 | main page        | ✓ 6/6 rows (Trending, Latest, …)                    |
+| row shape        | ✓ landscape, isHorizontalImages = true (6/6 sampled) |
 | search "honey"   | ✓ 1 result                                          |
 | load (series)    | ✓ Honey Blonde 2, 4 episodes                        |
 | play ep 2        | ✓ HLS 1080p, first frame 1.6 s; 5 sources, 3 subs   |

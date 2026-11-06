@@ -81,12 +81,19 @@ class Pornhub : MainAPI() {
             })
             emitted = true
         }
+        // The mp4 mediaDefinition is a get_media JSON endpoint, not a video file. Emitting it as a
+        // VIDEO link is what left the player loading forever, so resolve it to real files first.
         detail.media.filter { it.format == "mp4" }.distinctBy { it.url }.forEach { media ->
-            callback(newExtractorLink(name, "$name MP4", media.url, ExtractorLinkType.VIDEO) {
-                quality = media.quality ?: 0
-                referer = data
-            })
-            emitted = true
+            val files = runCatching { PornhubParser.mp4Sources(app.get(media.url, referer = data).text) }
+                .getOrDefault(emptyList())
+            files.forEach { file ->
+                val height = file.quality ?: media.quality ?: 0
+                callback(newExtractorLink(name, "$name ${height}p MP4", file.url, ExtractorLinkType.VIDEO) {
+                    quality = height
+                    referer = data
+                })
+                emitted = true
+            }
         }
         return emitted
     }

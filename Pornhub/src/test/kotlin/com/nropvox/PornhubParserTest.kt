@@ -50,4 +50,20 @@ class PornhubParserTest {
         assertEquals(listOf(240, 720, 720), detail.media.map { it.quality })
         assertEquals(listOf("hls", "hls", "mp4"), detail.media.map { it.format })
     }
+
+    @Test
+    fun mp4SourcesReadsGetMediaFiles() {
+        val json = """[{"videoUrl":"https://cdn.example/1080.mp4","quality":"1080","format":"mp4","remote":false},
+            {"videoUrl":"https://cdn.example/2160.mp4","quality":["2160"],"format":"mp4"},
+            {"videoUrl":"","quality":"720","format":"mp4"}]"""
+        val sources = PornhubParser.mp4Sources(json)
+        assertEquals(listOf("https://cdn.example/1080.mp4", "https://cdn.example/2160.mp4"), sources.map { it.url })
+        assertEquals(listOf(1080, 2160), sources.map { it.quality })
+    }
+
+    @Test
+    fun mp4SourcesIsEmptyWhenEndpointHasNoFiles() {
+        assertTrue(PornhubParser.mp4Sources("[]").isEmpty())
+        assertTrue(PornhubParser.mp4Sources("<html>Unauthorized</html>").isEmpty())
+    }
 }

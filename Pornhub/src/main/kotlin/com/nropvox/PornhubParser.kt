@@ -18,6 +18,7 @@ object PornhubParser {
     )
 
     private val pagePattern = Regex("""[?&]page=(\d+)""")
+    private val digitsPattern = Regex("""\d+""")
     private val flashvarsPattern = Regex("""var\s+flashvars_\d+\s*=\s*(\{.*?\});""", setOf(RegexOption.DOT_MATCHES_ALL))
     private val mapper = ObjectMapper()
 
@@ -47,6 +48,26 @@ object PornhubParser {
             plot = doc.selectFirst("meta[property=og:description]")?.attr("content")?.ifBlank { null },
             media = media,
         )
+    }
+
+    // An mp4 mediaDefinition points at a get_media endpoint, which answers with a JSON array of
+    // direct files, or [] when the video has none. Parse that array into playable MP4 entries.
+    fun mp4Sources(json: String): List<Media> {
+        val nodes = runCatching { mapper.readTree(json) }.getOrNull() ?: return emptyList()
+        if (!nodes.isArray) return emptyList()
+        return nodes.mapNotNull { node ->
+            val url = node.get("videoUrl")?.asText()?.takeIf { it.startsWith("http") } ?: return@mapNotNull null
+            val format = node.get("format")?.asText().orEmpty()
+            if (format.isNotEmpty() && format != "mp4") return@mapNotNull null
+            Media(url, qualityOf(node.get("quality")), "mp4")
+        }.distinctBy { it.url }
+    }
+
+    // Quality arrives as "1080", 1080, or a one-element array of those.
+    private fun qualityOf(node: JsonNode?): Int? {
+        if (node == null || node.isNull) return null
+        val text = if (node.isArray) node.firstOrNull()?.asText() else node.asText()
+        return text?.let { digitsPattern.find(it)?.value?.toIntOrNull() }
     }
 
     private fun flashvars(doc: Document): JsonNode? {

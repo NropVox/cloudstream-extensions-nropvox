@@ -1,0 +1,102 @@
+{
+  "vid": "oXQ8X6aoX3G",
+  "videoFID": 18773240,
+  "duration": 216,
+  "watchId": "qNXKykvhnIFppxCCPYLcFUBXYU02aETV",
+  "available" : true,
+  "fallback" : false,
+  "code": 0,
+  "message" : "",
+  "sources": {
+    "mp4": {
+
+      "1440p(2K) HD": {
+      "labelShort": "1440p",
+      "src": "https://vid-s3-c50-fr-cdn.eporner.com/v1/Y23gr15um8djzVqHpTUZvQ/1793943101_49.145.222.190_2002/18773240-1440p.mp4",
+        "type": "video/mp4",
+        "default": false
+      },
+      "1080p HD": {
+      "labelShort": "1080p",
+      "src": "https://vid-s3-c50-fr-cdn.eporner.com/v1/Y23gr15um8djzVqHpTUZvQ/1793943101_49.145.222.190_2002/18773240-1080p.mp4",
+        "type": "video/mp4",
+        "default": false
+      },
+      "720p HD": {
+      "labelShort": "720p",
+      "src": "https://vid-s12-n50-fr-cdn.eporner.com/v4/Y23gr15um8djzVqHpTUZvQ/1793943101_49.145.222.190_2002/18773240-720p.mp4",
+        "type": "video/mp4",
+        "default": true
+      },
+      "480p": {
+      "labelShort": "480p",
+      "src": "https://vid-s3-c50-fr-cdn.eporner.com/v1/Y23gr15um8djzVqHpTUZvQ/1793943101_49.145.222.190_2002/18773240-480p.mp4",
+        "type": "video/mp4",
+        "default": false
+      },
+      "360p": {
+      "labelShort": "360p",
+      "src": "https://vid-s12-n50-fr-cdn.eporner.com/v4/Y23gr15um8djzVqHpTUZvQ/1793943101_49.145.222.190_2002/18773240-360p.mp4",
+        "type": "video/mp4",
+        "default": false
+      },
+      "240p": {
+      "labelShort": "240p",
+      "src": "https://vid-s12-n50-fr-cdn.eporner.com/v4/Y23gr15um8djzVqHpTUZvQ/1793943101_49.145.222.190_2002/18773240-240p.mp4",
+        "type": "video/mp4",
+        "default": false
+      }    }
+          },
+  "backupServers": [null],
+  "backupServersHls": [null],
+  "volPrefixes": [],
+  "volPrefixesHls": [],
+    "lastSpeed": 1200000,
+    "vtt": "https://static-sg-cdn.eporner.com/thumbs/static4/1/18/187/18773240/tiles.vtt",
+  "activeLimits": 0,
+  "dashReport": "minimal",   "hlsReport": "minimal",   "heatmap": {
+    "collect": true,
+    "show": true,
+    "bucketCount": 200,
+    "url": "/xhr/video-heatmap/18773240/",
+    "token": "1793935901.0c2f8655dc35898402488d31872523ca3b6bd42590b5d079b4d3d9d943e31093",
+    "fetchDelay": 0,
+    "sampleInterval": 1000
+  },
+  "volume": 1,
+  "inplayer": {
+    "desktop": {
+        "active": true,
+        "src": "/dot/inplayer.php",
+        "width": 300,
+        "height": 250
+    },
+        "mobile": {
+        "active": false,
+        "src": "/dot/inplayer.php?mobile=1",
+        "width": 300,
+        "height": 100
+    }
+  },
+  "inplayerLink": {
+    "active": true,
+    "endpointURL": "/dot/dot.php?v=2"
+  },
+  "vast": {
+    "active": true,
+    "tag": "https:\/\/www.eporner.com\/xhr\/vast\/",
+    "timeout": 5000,
+    "maxSkipOffset": 10,
+    "postroll": {
+      "active": true,
+      "tag": "https:\/\/www.eporner.com\/xhr\/vast\/?roll=postroll",
+      "timeout": 5000,
+      "maxSkipOffset": 10
+    }
+  },
+  "netblock": null,
+  "speedtest": {
+    "speed": 0,
+    "avgspeed": 0    }
+
+}

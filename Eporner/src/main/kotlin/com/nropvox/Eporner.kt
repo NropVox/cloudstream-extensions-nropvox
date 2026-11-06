@@ -1,6 +1,7 @@
 package com.nropvox
 
 import com.lagradost.cloudstream3.ErrorLoadingException
+import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
@@ -49,7 +50,8 @@ class Eporner : MainAPI() {
         val (query, order) = request.data.split('|')
         val res = app.get(api(query, order, page)).parsedSafe<EpornerSearch>()
         val items = res?.videos.orEmpty().mapNotNull { it.toSearchResponse() }
-        return newHomePageResponse(request.name, items, hasNext(res, page))
+        // Video thumbnails are 16:9, so the row uses landscape cards.
+        return newHomePageResponse(HomePageList(request.name, items, true), hasNext = hasNext(res, page))
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {

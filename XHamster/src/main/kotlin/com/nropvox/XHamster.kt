@@ -1,6 +1,7 @@
 package com.nropvox
 
 import com.lagradost.cloudstream3.ErrorLoadingException
+import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
@@ -37,10 +38,10 @@ class XHamster : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val doc = app.get(withPage(request.data, page)).document
+        // Video thumbnails are 16:9, so the row uses landscape cards.
         return newHomePageResponse(
-            request.name,
-            XHamsterParser.cards(doc, mainUrl).map { it.toSearchResponse() },
-            XHamsterParser.hasNextPage(doc, page, mainUrl),
+            HomePageList(request.name, XHamsterParser.cards(doc, mainUrl).map { it.toSearchResponse() }, true),
+            hasNext = XHamsterParser.hasNextPage(doc, page, mainUrl),
         )
     }
 

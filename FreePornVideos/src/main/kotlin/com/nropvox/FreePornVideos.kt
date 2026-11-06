@@ -1,6 +1,7 @@
 package com.nropvox
 
 import com.lagradost.cloudstream3.ErrorLoadingException
+import com.lagradost.cloudstream3.HomePageList
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
@@ -39,7 +40,11 @@ class FreePornVideos : MainAPI() {
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         val doc = app.get(withPage(request.data, page)).document
         val items = FreePornVideosParser.cards(doc, mainUrl).map { it.toSearchResponse() }
-        return newHomePageResponse(request.name, items, FreePornVideosParser.hasNextPage(doc, page))
+        // Video thumbnails are 16:9, so the row uses landscape cards.
+        return newHomePageResponse(
+            HomePageList(request.name, items, true),
+            hasNext = FreePornVideosParser.hasNextPage(doc, page),
+        )
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {

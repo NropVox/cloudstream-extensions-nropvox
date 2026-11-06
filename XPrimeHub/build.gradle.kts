@@ -10,4 +10,4 @@ cloudstream {
 }
 
 // The nexdrive host resolvers are shared with Vegamovies.
-android.sourceSets.getByName("main").kotlin.srcDir("../shared/nexdrive")
+android.sourceSets.getByName("main").kotlin.directories.add("../shared/nexdrive")

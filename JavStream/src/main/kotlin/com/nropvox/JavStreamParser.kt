@@ -50,8 +50,9 @@ internal object JavStreamParser {
     /** The page linked from the first of the [cards] that mentions [code]. */
     fun findPage(root: Element, cards: String, link: String, code: String, base: String): String? {
         val pattern = codeRegex(code) ?: return null
-        return root.select(cards).firstOrNull { it.mentions(pattern) }
-            ?.selectFirst(link)?.let { absolute(it.attr("href"), base) }
+        val card: Element = root.select(cards).firstOrNull { it.mentions(pattern) } ?: return null
+        val anchor: Element = card.selectFirst(link) ?: return null
+        return absolute(anchor.attr("href"), base)
     }
 
     /** MissAV has `/en/{code}` plus `-uncensored-leak`/`-english-subtitle` uploads; the plain one first. */

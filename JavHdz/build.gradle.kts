@@ -1,4 +1,4 @@
-version = 15
+version = 16
 
 cloudstream {
     authors = listOf("NropVox")
@@ -28,4 +28,4 @@ dependencies {
 // Cloudstream's inline persistence and JSON APIs now use Java 11 bytecode.
 
 // The settings sheet (OmniStream's design) is shared: src/main/res is a symlink to shared/settingsui/res.
-android.sourceSets.getByName("main").kotlin.srcDir("../shared/settingsui")
+android.sourceSets.getByName("main").kotlin.directories.add("../shared/settingsui")

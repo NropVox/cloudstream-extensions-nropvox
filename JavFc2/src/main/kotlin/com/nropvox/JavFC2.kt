@@ -1,5 +1,6 @@
 package com.nropvox
 
+import com.lagradost.cloudstream3.ErrorLoadingException
 import com.lagradost.cloudstream3.HomePageResponse
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MainAPI
@@ -12,6 +13,7 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.fixUrl
 import com.lagradost.cloudstream3.fixUrlNull
 import com.lagradost.cloudstream3.mainPageOf
+import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.newEpisode
 import com.lagradost.cloudstream3.newHomePageResponse
 import com.lagradost.cloudstream3.newMovieSearchResponse
@@ -22,6 +24,11 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.loadExtractor
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.nicehttp.NiceResponse
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import org.jsoup.nodes.Element
 
 class JavFC2 : MainAPI() {
@@ -30,6 +37,8 @@ class JavFC2 : MainAPI() {
     override val hasMainPage = true
     override var lang = "en"
     override val supportedTypes = setOf(TvType.NSFW)
+
+    private val site by lazy { Challenged(CloudflareKiller()) }
 
     override val mainPage = mainPageOf(
         "home/vids" to "Latest",
@@ -60,7 +69,7 @@ class JavFC2 : MainAPI() {
         }
 
         val url = "$mainUrl/$trueData"
-        val document = app.get(url).document
+        val document = site.get(url).document
 
         val home = document.select(".movie-container > div").mapNotNull {
             it.mainPageResults()
@@ -71,7 +80,7 @@ class JavFC2 : MainAPI() {
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
         val url = "$mainUrl/search/?q=$query&per_page=${(page - 1) * 24}"
-        val document = app.get(url).document
+        val document = site.get(url).document
 
         val results = document.select(".movie-container > div").mapNotNull {
             it.mainPageResults()
@@ -99,7 +108,7 @@ class JavFC2 : MainAPI() {
     private val srcRegex = Regex("""src:\s*['"](https?://[^'"]+[^'"]*)['"]""")
 
     override suspend fun load(url: String): LoadResponse? {
-        val document = app.get(url).document
+        val document = site.get(url).document
 
         val title = document.selectFirst(".title")?.text()?.trim() ?: return null
         val poster = fixUrlNull(document.selectFirst("#info img")?.attr("src"))
@@ -125,7 +134,7 @@ class JavFC2 : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        val document = app.get(data).document
+        val document = site.get(data).document
 
         val code = data.substringBefore("?").substringAfterLast("/").substringBefore(".html")
 
@@ -146,5 +155,38 @@ class JavFC2 : MainAPI() {
         loadExtractor("https://subtitlecat.com/?query=$code", subtitleCallback, callback)
 
         return true
+    }
+}
+
+/**
+ * javfc2.xyz answers every path with a Cloudflare managed challenge. The first request solves it alone; later
+ * ones replay the clearance two at a time, since 5+ parallel requests deadlock inside CloudflareKiller.
+ */
+private class Challenged(private val cloudflare: CloudflareKiller) {
+    @Volatile private var warmUntil = 0L
+    private val lock = Mutex()
+    private val slots = Semaphore(2)
+
+    suspend fun get(url: String): NiceResponse {
+        if (System.currentTimeMillis() >= warmUntil) lock.withLock {
+            if (System.currentTimeMillis() >= warmUntil) {
+                val response = app.get(url, interceptor = cloudflare, timeout = 60L)
+                if (response.code in 200..299) warmUntil = System.currentTimeMillis() + WARM_MS
+                return checked(response)
+            }
+        }
+        return checked(slots.withPermit { app.get(url, interceptor = cloudflare, timeout = 60L) })
+    }
+
+    private fun checked(response: NiceResponse): NiceResponse {
+        if (response.code in listOf(403, 503) && response.headers["server"].orEmpty().startsWith("cloudflare")) {
+            warmUntil = 0L
+            throw ErrorLoadingException("Cloudflare check not passed, retry in a moment")
+        }
+        return response
+    }
+
+    private companion object {
+        const val WARM_MS = 10 * 60 * 1000L
     }
 }

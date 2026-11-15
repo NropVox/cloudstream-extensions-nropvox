@@ -19,6 +19,7 @@ import com.lagradost.cloudstream3.newSearchResponseList
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import okhttp3.Interceptor
 import java.net.URLEncoder
 
 class Pornhub : MainAPI() {
@@ -97,6 +98,12 @@ class Pornhub : MainAPI() {
         }
         return emitted
     }
+
+    // The hv-h.phncdn.com HLS hosts sit behind Cloudflare and answer 410 to players whose TLS handshake isn't a
+    // browser's (mpv's GnuTLS-linked ffmpeg). A pass-through interceptor makes the host route these links through
+    // its own proxy, which fetches them with OkHttp.
+    override fun getVideoInterceptor(extractorLink: ExtractorLink): Interceptor =
+        Interceptor { chain -> chain.proceed(chain.request()) }
 
     private fun withPage(url: String, page: Int): String =
         if (page <= 1) url else "$url${if ('?' in url) '&' else '?'}page=$page"

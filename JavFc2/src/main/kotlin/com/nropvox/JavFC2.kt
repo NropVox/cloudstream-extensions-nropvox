@@ -145,7 +145,12 @@ class JavFC2 : MainAPI() {
         document.select("track[kind=\"subtitles\"]").forEach { sub ->
             val subUrl = sub.attr("src")
             val label = sub.attr("label")
-            subtitleCallback(newSubtitleFile(label, fixUrl(subUrl)))
+            val fullUrl = fixUrl(subUrl)
+            // The .vtt sits behind the same Cloudflare challenge, and the player fetches it on its own, so it
+            // needs the clearance cookie and user agent the plugin solved for.
+            subtitleCallback(newSubtitleFile(label, fullUrl) {
+                headers = site.headers(fullUrl) + mapOf("Referer" to "$mainUrl/")
+            })
         }
 
         // Segments sit behind fake .png names, which M3u8Helper rejects, so the player probes the playlist itself.
@@ -166,6 +171,8 @@ private class Challenged(private val cloudflare: CloudflareKiller) {
     @Volatile private var warmUntil = 0L
     private val lock = Mutex()
     private val slots = Semaphore(2)
+
+    fun headers(url: String): Map<String, String> = cloudflare.getCookieHeaders(url).toMap()
 
     suspend fun get(url: String): NiceResponse {
         if (System.currentTimeMillis() >= warmUntil) lock.withLock {

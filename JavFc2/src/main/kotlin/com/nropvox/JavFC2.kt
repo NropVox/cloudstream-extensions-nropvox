@@ -30,6 +30,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import org.jsoup.nodes.Element
+import java.net.URLEncoder
 
 class JavFC2 : MainAPI() {
     override var mainUrl = "https://javfc2.xyz"
@@ -70,48 +71,29 @@ class JavFC2 : MainAPI() {
 
         val url = "$mainUrl/$trueData"
         val document = site.get(url).document
-
-        val home = document.select(".movie-container > div").mapNotNull {
-            it.mainPageResults()
-        }
+        val home = JavFC2Parser.cards(document).map { it.toSearchResponse() }
 
         return newHomePageResponse(request.name, home, true)
     }
 
     override suspend fun search(query: String, page: Int): SearchResponseList {
-        val url = "$mainUrl/search/?q=$query&per_page=${(page - 1) * 24}"
+        val encodedQuery = URLEncoder.encode(query, "UTF-8")
+        val url = "$mainUrl/search/?q=$encodedQuery&per_page=${(page - 1) * 24}"
         val document = site.get(url).document
-
-        val results = document.select(".movie-container > div").mapNotNull {
-            it.mainPageResults()
-        }
+        val results = JavFC2Parser.cards(document).map { it.toSearchResponse() }
 
         return newSearchResponseList(results, results.isNotEmpty())
     }
 
-    private fun Element.mainPageResults(): SearchResponse? {
-        if (selectFirst(".label")?.text()?.trim() in setOf("Actor", "Seller")) {
-            return null
+    private fun JavFC2Parser.Card.toSearchResponse(): SearchResponse =
+        newMovieSearchResponse(title, fixUrl(href), TvType.NSFW) {
+            posterUrl = fixUrlNull(poster)
         }
-
-        val link = this.selectFirst(".movie-title a") ?: return null
-        val title = link.text().trim()
-        val href = fixUrl(link.attr("href"))
-        val img = this.selectFirst("img") ?: return null
-        val poster = fixUrl(img.attr("data-src"))
-
-        return newMovieSearchResponse(title, href, TvType.NSFW) {
-            this.posterUrl = poster
-        }
-    }
-
-    private val srcRegex = Regex("""src:\s*['"](https?://[^'"]+[^'"]*)['"]""")
 
     override suspend fun load(url: String): LoadResponse? {
         val document = site.get(url).document
-
-        val title = document.selectFirst(".title")?.text()?.trim() ?: return null
-        val poster = fixUrlNull(document.selectFirst("#info img")?.attr("src"))
+        val title = JavFC2Parser.watchTitle(document) ?: return null
+        val poster = fixUrlNull(JavFC2Parser.watchPoster(document))
 
         val episodes = document.select(".season a:not([data-toggle])").mapIndexedNotNull { i, a ->
             val href = fixUrlNull(a.attr("href")) ?: return@mapIndexedNotNull null
@@ -138,9 +120,7 @@ class JavFC2 : MainAPI() {
 
         val code = data.substringBefore("?").substringAfterLast("/").substringBefore(".html")
 
-        val videoUrl = document.select("#player-div script").html().let {
-            srcRegex.find(it)?.groups[1]?.value
-        } ?: return false
+        val videoUrl = JavFC2Parser.streamUrl(document) ?: return false
 
         document.select("track[kind=\"subtitles\"]").forEach { sub ->
             val subUrl = sub.attr("src")
@@ -160,6 +140,38 @@ class JavFC2 : MainAPI() {
         loadExtractor("https://subtitlecat.com/?query=$code", subtitleCallback, callback)
 
         return true
+    }
+}
+
+internal object JavFC2Parser {
+    private val srcRegex = Regex("""\bsrc\s*:\s*['"](https?://[^'"\s]+)['"]""")
+
+    data class Card(val title: String, val href: String, val poster: String?)
+
+    fun cards(document: Element): List<Card> = document.select(".movie-container > article, .movie-container > div")
+        .mapNotNull { card ->
+            val label = card.selectFirst(".label, .modern-movie-card__badge")?.text()
+            if (label == "Actor" || label == "Seller") return@mapNotNull null
+
+            val link = card.selectFirst("a.modern-movie-card__link[href], .movie-title a[href]") ?: return@mapNotNull null
+            val title = (link.selectFirst(".modern-movie-card__title") ?: link).text()
+            val href = link.attr("href").trim()
+            if (title.isBlank() || href.isEmpty()) return@mapNotNull null
+
+            val image = card.selectFirst(".movie-img img") ?: card.selectFirst("img")
+            val poster = image?.let { it.attr("data-src").ifBlank { it.attr("src") } }
+            Card(title, href, poster)
+        }
+
+    fun watchTitle(document: Element): String? =
+        (document.selectFirst(".modern-watch-title") ?: document.selectFirst(".title"))
+            ?.text()?.takeIf { it.isNotBlank() }
+
+    fun watchPoster(document: Element): String? =
+        (document.selectFirst(".modern-watch-poster img") ?: document.selectFirst("#info img"))?.attr("src")
+
+    fun streamUrl(document: Element): String? = document.select("#player-div script").firstNotNullOfOrNull { script ->
+        srcRegex.find(script.data().replace("\\/", "/"))?.groupValues?.get(1)
     }
 }
 
